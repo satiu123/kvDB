@@ -1,36 +1,75 @@
 ---
+# .clang-tidy configuration for the kvdb project
+# This configuration aims for modern, safe, and readable C++ code.
+# It is based on a wide range of checks and tailored for our specific needs.
+
+# 'Checks' defines the enabled and disabled static analysis checks.
+# The general strategy is to enable broad categories and then disable specific,
+# noisy, or unhelpful checks individually.
 Checks: >
-  -*,
-  bugprone-*,
-  cert-*,
-  cppcoreguidelines-*,
-  clang-analyzer-*,
-  google-*,
-  hicpp-*,
-  misc-*,
-  modernize-*,
-  performance-*,
-  portability-*,
-  readability-*,
-  -modernize-use-trailing-return-type,
-  -google-readability-todo,
-  -readability-identifier-length,
-  -readability-magic-numbers
+  -*,                   # 1. Start by disabling everything.
+  bugprone-*,           # 2. Enable categories of checks we care about.
+  cert-*,               # Checks for CERT C++ Secure Coding Standards.
+  cppcoreguidelines-*,  # Checks for C++ Core Guidelines.
+  clang-analyzer-*,     # In-depth static analysis from Clang's static analyzer.
+  google-*,             # Checks for Google C++ Style Guide rules.
+  hicpp-*,              # Checks for High Integrity C++ Coding Standard.
+  misc-*,               # Miscellaneous useful checks.
+  modernize-*,          # Checks for modernizing C++ code (e.g., to C++11/14/17/20).
+  performance-*,        # Checks for performance anti-patterns.
+  portability-*,        # Checks for portability issues.
+  readability-*         # Checks for code readability.
 
+# 3. Disable specific checks that are too noisy or conflict with our idioms.
+DisabledChecks: >
+  -modernize-use-trailing-return-type, # Trailing return type is often a matter of style, not necessity.
+  -google-readability-todo,            # Allows using TODO comments without specific formatting.
+  -readability-identifier-length,      # Allows short identifiers like 'i', 'db', 'fd', which are common.
+  -readability-magic-numbers,          # Disabled for now, but can be useful. Enable if you want strictness.
+  -hicpp-special-member-functions,     # Can be too verbose, especially when defaulting members.
+  -cppcoreguidelines-special-member-functions, # Similar to the one above.
+  
+  # --- Important additions based on our logger implementation ---
+  -cppcoreguidelines-macro-usage,      # Globally disable this, as we have justified macro usage.
+                                       # Alternatively, you can keep this enabled and use NOLINT in code.
+                                       # For a project-wide idiom like logging, disabling it here is cleaner.
+  -cppcoreguidelines-avoid-do-while    # Disable the check that flags our safe do-while(false) macro idiom.
+
+
+# 'WarningsAsErrors' can be used to treat all warnings from clang-tidy as errors,
+# forcing them to be fixed. It's good for CI/CD environments.
+# Example: 'bugprone-*,performance-*'
 WarningsAsErrors: ''
-HeaderFilterRegex: '.*'
-AnalyzeTemporaryDtors: false
 
+# 'HeaderFilterRegex' restricts checks to headers matching this regex.
+# Setting it to '.*' checks all included headers. For project-specific code,
+# you might want to narrow it down, e.g., '^(kvdb)/.*'.
+HeaderFilterRegex: '.*'
+
+# 'ExtraArgs' allows passing additional command-line arguments to the compiler.
+# This is crucial for setting the C++ standard.
+ExtraArgs:
+  - -std=c++20 # Or c++17 if you are not using C++20 features yet.
+
+# 'CheckOptions' allows fine-tuning the behavior of specific checks.
 CheckOptions:
-  - { key: readability-identifier-naming.ClassCase,           value: CamelCase  }
+  # --- Naming Conventions (customized from your original file) ---
+  - { key: readability-identifier-naming.ClassCase,           value: CamelCase }
+  - { key: readability-identifier-naming.StructCase,          value: CamelCase }
+  - { key: readability-identifier-naming.EnumCase,            value: CamelCase }
   - { key: readability-identifier-naming.NamespaceCase,       value: lower_case }
-  - { key: readability-identifier-naming.PrivateMemberSuffix, value: _          }
-  - { key: readability-identifier-naming.StructCase,          value: CamelCase  }
-  - { key: readability-identifier-naming.FunctionCase,        value: camelBack  }
-  - { key: readability-identifier-naming.VariableCase,        value: camelBack  }
-  - { key: readability-identifier-naming.ConstantCase,        value: UPPER_CASE }
-  - { key: readability-identifier-naming.EnumCase,            value: CamelCase  }
-  - { key: readability-identifier-naming.EnumConstantCase,    value: UPPER_CASE }
-  - { key: readability-implicit-bool-conversion.AllowIntegerConditions,  value: 1  }
-  - { key: readability-implicit-bool-conversion.AllowPointerConditions,  value: 1  }
+  - { key: readability-identifier-naming.FunctionCase,        value: camelBack }
+  - { key: readability-identifier-naming.VariableCase,        value: camelBack }
+  - { key: readability-identifier-naming.PrivateMemberSuffix, value: _ } # Good practice to denote private members.
+  - { key: readability-identifier-naming.ConstantCase,        value: UPPER_CASE } # For global/static constants.
+  - { key: readability-identifier-naming.EnumConstantCase,    value: kCamelCase } # Google style (e.g., kOk, kError). Or stick with UPPER_CASE if you prefer.
+  
+  # --- Other Important Options ---
+  - { key: readability-implicit-bool-conversion.AllowIntegerConditions,  value: 1 } # Allows `if (count)`
+  - { key: readability-implicit-bool-conversion.AllowPointerConditions,  value: 1 } # Allows `if (ptr)`
+
+  # --- Recommended Additions ---
+  - { key: modernize-use-emplace.ContainerSet, value: 'std::vector;std::list;std::deque' } # Specify which containers should prefer emplace.
+  - { key: modernize-use-override.AllowOverrideAndFinal, value: 1 } # Enforce 'override' or 'final' on virtual methods.
+  - { key: performance-unnecessary-value-param.AllowedTypes, value: 'trivial_string_view;QVariant' } # Add types that are cheap to copy.
 ...

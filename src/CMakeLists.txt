@@ -1,5 +1,6 @@
 set(SOURCES
     database.cpp
+    log.cpp
 )
 
 # 创建库

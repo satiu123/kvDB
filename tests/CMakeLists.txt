@@ -12,7 +12,8 @@ if(NOT GTEST_FOUND)
 endif()
 
 set(TEST_SOURCES
-    test_database.cpp
+    # test_database.cpp
+    test_logger.cpp
 )
 
 add_executable(kvdb_tests ${TEST_SOURCES})

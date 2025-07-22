@@ -42,7 +42,17 @@ void Database::clear() {
 
 bool Database::exists(const std::string& key) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return data_.find(key) != data_.end();
+    return data_.contains(key);
 }
-
+bool Database::openWalFile() {
+    // Implementation for opening the Write-Ahead Log file
+    walFile_.open(walPath_, std::ios::app);
+    if (!walFile_) {
+        return false;  // Failed to open WAL file
+    }
+    return true;  // WAL file opened successfully
+}
+bool Database::applyWalLog() {
+    // Implementation for applying the Write-Ahead Log
+}
 } // namespace kvdb
