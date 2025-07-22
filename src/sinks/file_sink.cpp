@@ -1,7 +1,5 @@
-#include "kvdb/log.h"
-#include <iostream>
+#include "kvdb/sinks/file_sink.h"
 namespace kvdb {
-
 
 kvdb::FileSink::FileSink(std::string_view filePath) : filePath_(filePath) {
     fileStream_.open(filePath_, std::ios::app);
@@ -14,6 +12,7 @@ kvdb::FileSink::~FileSink() {
         fileStream_.close();
     }
 }
+// 文件日志记录器实现
 void kvdb::FileSink::log(const LogRecord& record) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (fileStream_) {
@@ -22,6 +21,7 @@ void kvdb::FileSink::log(const LogRecord& record) {
         throw std::runtime_error("Log file stream is not open: " + filePath_);
     }
 }
+// 刷新文件流
 void kvdb::FileSink::flush() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (fileStream_) {
@@ -29,30 +29,5 @@ void kvdb::FileSink::flush() {
     } else {
         throw std::runtime_error("Log file stream is not open: " + filePath_);
     }
-}
-
-
-void kvdb::ConsoleSink::log(const LogRecord& record) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::cout << record.toString() << '\n';
-}
-
-void kvdb::ConsoleSink::flush() {
-    // 控制台通常不需要刷新，但可以实现为无操作
-}
-
-void kvdb::Logger::addSink(std::shared_ptr<LogSink> sink) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    sinks_.push_back(std::move(sink)); // 使用 std::move 避免不必要的复制
-}
-void kvdb::Logger::removeAllSinks() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    sinks_.clear(); // 清空所有接收器
-}
-void kvdb::Logger::setLevel(LogLevel level) {
-    level_ = level; // 设置当前日志级别
-}
-bool kvdb::Logger::shouldLog(LogLevel level) const {
-    return level >= level_; 
 }
 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(k-vDB VERSION 0.1.0 LANGUAGES CXX)
+project(kvDB VERSION 0.1.0 LANGUAGES CXX)
 
 # 设置C++标准
 set(CMAKE_CXX_STANDARD 20)

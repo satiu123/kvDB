@@ -1,22 +1,21 @@
-# Google Test查找模块
-find_package(GTest QUIET)
-if(NOT GTEST_FOUND)
-    # 如果没找到，可以从源代码构建
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG release-1.11.0
-    )
-    FetchContent_MakeAvailable(googletest)
-endif()
+# tests/CMakeLists.txt
 
-set(TEST_SOURCES
-    # test_database.cpp
+# 找到 GTest 包 (这是现代 CMake 的推荐做法)
+find_package(GTest REQUIRED)
+
+add_executable(kvdb_tests
     test_logger.cpp
+    # test_database.cpp
 )
 
-add_executable(kvdb_tests ${TEST_SOURCES})
-target_link_libraries(kvdb_tests k-vDB GTest::gtest_main)
+# 正确的方式: 链接到 CMake 目标，包括 GTest 的目标
+target_link_libraries(kvdb_tests 
+    PRIVATE 
+        kvdb
+        GTest::gtest_main # 使用 GTest 提供的导入目标
+        GTest::gtest
+)
 
-add_test(NAME kvdb_tests COMMAND kvdb_tests)
+# 添加测试
+include(GoogleTest)
+gtest_discover_tests(kvdb_tests)

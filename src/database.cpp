@@ -54,5 +54,6 @@ bool Database::openWalFile() {
 }
 bool Database::applyWalLog() {
     // Implementation for applying the Write-Ahead Log
+    return true;
 }
 } // namespace kvdb
