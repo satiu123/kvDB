@@ -6,14 +6,16 @@ find_package(GTest REQUIRED)
 add_executable(kvdb_tests
     test_logger.cpp
     # test_database.cpp
+    test_wal.cpp
 )
 
-# 正确的方式: 链接到 CMake 目标，包括 GTest 的目标
+# 链接到 CMake 目标，包括 GTest 的目标
 target_link_libraries(kvdb_tests 
     PRIVATE 
         kvdb
-        GTest::gtest_main # 使用 GTest 提供的导入目标
-        GTest::gtest
+        /usr/lib/libgtest.so
+        /usr/lib/libgtest_main.so
+        pthread
 )
 
 # 添加测试

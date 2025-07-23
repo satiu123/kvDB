@@ -2,12 +2,12 @@
 #include "kvdb/database.h"
 
 int main() {
-    kvdb::Database db;
+    kvdb::Database db("kvdb.wal");
     
     // 存储一些键值对
-    db.put("name", "k-vDB");
-    db.put("version", "0.1.0");
-    db.put("language", "C++");
+    // db.put("name", "kvDB");
+    // db.put("version", "0.1.0");
+    // db.put("language", "C++");
     
     // 检索值
     auto name = db.get("name");

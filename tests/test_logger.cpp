@@ -1,11 +1,12 @@
 #include "kvdb/log.h"
+#include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
 #include <thread>
 #include <vector>
 
 // 测试日志系统的使用
-int main() {
+TEST(LoggerTest, BasicLogFunctionality) {
     // 常量定义
     constexpr int DEBUG_VALUE = 42;
     constexpr int WARNING_THRESHOLD = 85;
@@ -48,7 +49,7 @@ int main() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_DURATION_MS));
             }
         });
-    
+    }
     // 等待所有线程完成
     for (auto& thread : threads) {
         thread.join();
@@ -57,7 +58,4 @@ int main() {
     // 移除所有日志接收器
     logger.removeAllSinks();
     std::cout << "日志测试完成\n";
-    
-    return 0;
-}
 }
