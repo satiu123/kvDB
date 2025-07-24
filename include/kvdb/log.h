@@ -7,9 +7,9 @@
 
 // --- 公共日志宏接口 ---
 
-#define LOG_DEBUG(fmt, ...)   KVDB_LOG_IMPL(kvdb::LogLevel::DEBUG, fmt __VA_OPT__(,) __VA_ARGS__)
-#define LOG_INFO(fmt, ...)    KVDB_LOG_IMPL(kvdb::LogLevel::INFO, fmt __VA_OPT__(,) __VA_ARGS__)
-#define LOG_WARNING(fmt, ...) KVDB_LOG_IMPL(kvdb::LogLevel::WARNING, fmt __VA_OPT__(,) __VA_ARGS__)
-#define LOG_ERROR(fmt, ...)   KVDB_LOG_IMPL(kvdb::LogLevel::ERROR, fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOG_DEBUG(fmt, ...) KVDB_LOG_IMPL(kvdb::LogLevel::DEBUG, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_INFO(fmt, ...) KVDB_LOG_IMPL(kvdb::LogLevel::INFO, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_WARNING(fmt, ...) KVDB_LOG_IMPL(kvdb::LogLevel::WARNING, fmt __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_ERROR(fmt, ...) KVDB_LOG_IMPL(kvdb::LogLevel::ERROR, fmt __VA_OPT__(, ) __VA_ARGS__)
 
-#endif // KVDB_LOG_H
+#endif  // KVDB_LOG_H

@@ -1,21 +1,21 @@
 # tests/CMakeLists.txt
 
-# 找到 GTest 包 (这是现代 CMake 的推荐做法)
+# 找到 GTest 包 
 find_package(GTest REQUIRED)
 
 add_executable(kvdb_tests
     test_logger.cpp
-    # test_database.cpp
+    test_database.cpp
     test_wal.cpp
 )
 
-# 链接到 CMake 目标，包括 GTest 的目标
+
+# 链接到 CMake 目标，使用现代 CMake 的 GTest 目标
 target_link_libraries(kvdb_tests 
     PRIVATE 
         kvdb
-        /usr/lib/libgtest.so
-        /usr/lib/libgtest_main.so
-        pthread
+        GTest::gtest
+        GTest::gtest_main
 )
 
 # 添加测试

@@ -2,61 +2,70 @@
 #define WAL_RECORD_H
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 namespace kvdb {
 
 // WAL记录操作类型
 enum class WalOpType : uint8_t {
-    PUT,    // 插入或更新键值对
-    REMOVE, // 删除键
-    CLEAR   // 清空数据库
+    PUT,     // 插入或更新键值对
+    REMOVE,  // 删除键
+    CLEAR    // 清空数据库
 };
 
 /**
  * @brief WAL记录类，表示一个预写日志记录
- * 
+ *
  * 该类表示一个WAL记录，用于持久化数据库操作
  * 支持序列化到二进制格式和从二进制格式反序列化
  */
 class WalRecord {
-public:
+  public:
     // 构造函数
     WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "");
-    
+
     // 从二进制数据反序列化一条记录
     static std::unique_ptr<WalRecord> deserialize(const std::vector<uint8_t>& data);
     static std::unique_ptr<WalRecord> deserialize(const uint8_t* data, size_t size);
-    
+
     // 序列化记录为二进制数据
     std::vector<uint8_t> serialize() const;
-    
+
     // 获取记录大小（序列化后）
     size_t size() const;
-    
+
     // 访问器
-    WalOpType getOpType() const { return op_type_; }
-    std::string_view getKey() const { return key_; }
-    std::string_view getValue() const { return value_; }
-    
+    WalOpType getOpType() const {
+        return op_type_;
+    }
+    std::string_view getKey() const {
+        return key_;
+    }
+    std::string_view getValue() const {
+        return value_;
+    }
+
     // 获取记录头部大小
-    static constexpr size_t getHeaderSize() { return HEADER_SIZE; }
-    
+    static constexpr size_t getHeaderSize() {
+        return HEADER_SIZE;
+    }
+
     // 计算记录校验和
     uint32_t calculateChecksum() const;
     bool validateChecksum() const;
-    
-private:
-    WalOpType op_type_;     // 操作类型
-    std::string key_;       // 键
-    std::string value_;     // 值（仅用于PUT操作）
-    uint32_t checksum_;     // 校验和，用于验证记录完整性
-    
+
+  private:
+    WalOpType op_type_;  // 操作类型
+    std::string key_;    // 键
+    std::string value_;  // 值（仅用于PUT操作）
+    uint32_t checksum_;  // 校验和，用于验证记录完整性
+
     // 记录头部格式常量
-    static constexpr size_t HEADER_SIZE = 17; // 1(op_type) + 4(key_size) + 4(value_size) + 4(checksum) + 4(total_size)
+    static constexpr size_t HEADER_SIZE =
+        17;  // 1(op_type) + 4(key_size) + 4(value_size) + 4(checksum) + 4(total_size)
 };
 
-} // namespace kvdb
-#endif // WAL_RECORD_H
+}  // namespace kvdb
+#endif  // WAL_RECORD_H

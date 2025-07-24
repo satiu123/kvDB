@@ -1,4 +1,5 @@
 #include "kvdb/log.h"
+
 #include <iostream>
 namespace kvdb {
 
@@ -43,16 +44,16 @@ void kvdb::ConsoleSink::flush() {
 
 void kvdb::Logger::addSink(std::shared_ptr<LogSink> sink) {
     std::lock_guard<std::mutex> lock(mutex_);
-    sinks_.push_back(std::move(sink)); // 使用 std::move 避免不必要的复制
+    sinks_.push_back(std::move(sink));  // 使用 std::move 避免不必要的复制
 }
 void kvdb::Logger::removeAllSinks() {
     std::lock_guard<std::mutex> lock(mutex_);
-    sinks_.clear(); // 清空所有接收器
+    sinks_.clear();  // 清空所有接收器
 }
 void kvdb::Logger::setLevel(LogLevel level) {
-    level_ = level; // 设置当前日志级别
+    level_ = level;  // 设置当前日志级别
 }
 bool kvdb::Logger::shouldLog(LogLevel level) const {
-    return level >= level_; 
+    return level >= level_;
 }
-}
+}  // namespace kvdb

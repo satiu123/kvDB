@@ -30,4 +30,4 @@ void kvdb::FileSink::flush() {
         throw std::runtime_error("Log file stream is not open: " + filePath_);
     }
 }
-}
+}  // namespace kvdb
