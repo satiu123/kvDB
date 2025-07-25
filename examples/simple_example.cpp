@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "kvdb/database.h"
+#include "kvdb/core/database.h"
 
 int main() {
     kvdb::Database db("kvdb.wal");

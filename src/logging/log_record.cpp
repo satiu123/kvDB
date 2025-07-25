@@ -1,4 +1,4 @@
-#include "kvdb/log_types.h"
+#include "kvdb/logging/log_types.h"
 namespace kvdb {
 
 kvdb::LogRecord::LogRecord(LogLevel lvl, std::chrono::system_clock::time_point ts, std::string msg,

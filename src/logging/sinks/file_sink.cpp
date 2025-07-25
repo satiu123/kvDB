@@ -1,4 +1,4 @@
-#include "kvdb/sinks/file_sink.h"
+#include "kvdb/logging/sinks/file_sink.h"
 namespace kvdb {
 
 kvdb::FileSink::FileSink(std::string_view filePath) : filePath_(filePath) {

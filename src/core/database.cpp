@@ -1,4 +1,4 @@
-#include "kvdb/database.h"
+#include "kvdb/core/database.h"
 
 #include <cstddef>  // for size_t
 #include <mutex>
@@ -6,61 +6,24 @@
 #include <string>
 #include <unordered_map>
 
-#include "kvdb/log.h"
+#include "kvdb/logging/log.h"
 
 namespace kvdb {
 
-Database::Database(std::string_view wal_path) : wal_(wal_path) {
-    // 从WAL中恢复数据
-    recoverFromWal();
+Database::Database(std::string_view wal_path, std::string_view snapshot_path)
+    : wal_(wal_path),
+      snapshot_(snapshot_path),
+      recovery_manager_(wal_, snapshot_),
+      snapshot_manager_(wal_, snapshot_) {
+    // 使用恢复管理器恢复数据
+    if (!recovery_manager_.recover(data_)) {
+        LOG_ERROR("数据恢复失败");
+    }
 }
 
 Database::~Database() {
     wal_.sync();   // 确保所有数据都已同步到磁盘
     wal_.close();  // 确保在析构时关闭WAL文件
-}
-
-// 从WAL中恢复数据
-void Database::recoverFromWal() {
-    LOG_INFO("正在从WAL文件恢复数据...");
-
-    // 如果WAL文件为空，则无需恢复
-    if (wal_.isEmpty()) {
-        LOG_INFO("WAL文件为空，无需恢复");
-        return;
-    }
-
-    // 重放WAL中的所有记录
-    bool success = wal_.replay([this](const WalRecord& record) {
-        switch (record.getOpType()) {
-            // 直接操作内存数据，不再写WAL
-            case WalOpType::PUT: {
-                data_[record.getKey().data()] = record.getValue();
-                LOG_DEBUG("恢复PUT操作: key={}, value={}", record.getKey(), record.getValue());
-                break;
-            }
-            case WalOpType::REMOVE: {
-                data_.erase(record.getKey().data());
-                LOG_DEBUG("恢复REMOVE操作: key={}", record.getKey());
-                break;
-            }
-            case WalOpType::CLEAR: {
-                data_.clear();
-                LOG_DEBUG("恢复CLEAR操作");
-                break;
-            }
-            default:
-                LOG_ERROR("未知的WAL记录类型: {}", static_cast<int>(record.getOpType()));
-                return false;
-        }
-        return true;
-    });
-
-    if (success) {
-        LOG_INFO("从WAL恢复数据成功，共恢复{}条记录", data_.size());
-    } else {
-        LOG_ERROR("从WAL恢复数据失败");
-    }
 }
 
 bool Database::put(std::string_view key, std::string_view value) {
@@ -75,6 +38,11 @@ bool Database::put(std::string_view key, std::string_view value) {
     // 2. 再修改内存数据
     data_[key.data()] = value.data();
     LOG_DEBUG("PUT操作成功: key={}, value={}", key, value);
+
+    // 3. 记录操作并检查是否需要自动快照
+    snapshot_manager_.recordOperation();
+    snapshot_manager_.checkAutoSnapshot(data_);
+
     return true;
 }
 
@@ -106,6 +74,11 @@ bool Database::remove(std::string_view key) {
     // 2. 再修改内存数据
     bool result = data_.erase(std::string(key)) > 0;
     LOG_DEBUG("REMOVE操作成功: key={}", key);
+
+    // 3. 记录操作并检查是否需要自动快照
+    snapshot_manager_.recordOperation();
+    snapshot_manager_.checkAutoSnapshot(data_);
+
     return result;
 }
 
@@ -126,11 +99,38 @@ void Database::clear() {
     // 2. 再修改内存数据
     data_.clear();
     LOG_DEBUG("CLEAR操作成功");
+
+    // 3. 记录操作并检查是否需要自动快照
+    snapshot_manager_.recordOperation();
+    snapshot_manager_.checkAutoSnapshot(data_);
 }
 
 bool Database::exists(std::string_view key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     return data_.contains(key.data());
+}
+
+// 创建快照
+bool Database::createSnapshot() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return snapshot_manager_.createSnapshot(data_);
+}
+
+// 设置快照配置
+void Database::setSnapshotConfig(const SnapshotConfig& config) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    snapshot_manager_.setConfig(config);
+}
+
+// 获取快照配置
+const SnapshotConfig& Database::getSnapshotConfig() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return snapshot_manager_.getConfig();
+}
+
+// 检查是否存在快照文件
+bool Database::hasSnapshot() const {
+    return snapshot_manager_.hasSnapshot();
 }
 
 }  // namespace kvdb

@@ -7,8 +7,8 @@
 #include <source_location>
 #include <vector>
 
-#include "kvdb/log_sink.h"   // 依赖 Sink 接口
-#include "kvdb/log_types.h"  // 依赖核心类型
+#include "kvdb/logging/log_sink.h"   // 依赖 Sink 接口
+#include "kvdb/logging/log_types.h"  // 依赖核心类型
 
 namespace kvdb {
 

@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "kvdb/log.h"
-#include "kvdb/wal/wal.h"
-#include "kvdb/wal/wal_record.h"
+#include "kvdb/logging/log.h"
+#include "kvdb/storage/wal/wal.h"
+#include "kvdb/storage/wal/wal_record.h"
 
 namespace kvdb {
 namespace {

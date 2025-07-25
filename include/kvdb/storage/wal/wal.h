@@ -7,7 +7,7 @@
 #include <mutex>
 #include <string>
 
-#include "kvdb/wal/wal_record.h"
+#include "kvdb/storage/wal/wal_record.h"
 
 namespace kvdb {
 

@@ -1,10 +1,10 @@
-#include "kvdb/wal/wal_record.h"
+#include "kvdb/storage/wal/wal_record.h"
 
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
 
-#include "kvdb/log.h"
+#include "kvdb/logging/log.h"
 
 namespace kvdb {
 

@@ -7,6 +7,7 @@ add_executable(kvdb_tests
     test_logger.cpp
     test_database.cpp
     test_wal.cpp
+    test_snapshot.cpp
 )
 
 

@@ -1,9 +1,9 @@
 #ifndef KVDB_LOG_H
 #define KVDB_LOG_H
 
-#include "kvdb/detail/log_macros.h"   // 包含内部实现宏
-#include "kvdb/sinks/console_sink.h"  // 方便用户直接使用
-#include "kvdb/sinks/file_sink.h"     // 方便用户直接使用
+#include "kvdb/logging/detail/log_macros.h"   // 包含内部实现宏
+#include "kvdb/logging/sinks/console_sink.h"  // 方便用户直接使用
+#include "kvdb/logging/sinks/file_sink.h"     // 方便用户直接使用
 
 // --- 公共日志宏接口 ---
 

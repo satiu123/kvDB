@@ -6,15 +6,18 @@
 #include <string>
 #include <unordered_map>
 
-#include "kvdb/wal/wal.h"
+#include "kvdb/storage/recovery_manager.h"
+#include "kvdb/storage/snapshot.h"
+#include "kvdb/storage/snapshot_manager.h"
+#include "kvdb/storage/wal/wal.h"
 
 namespace kvdb {
 
 class Database {
   public:
-    Database() = delete;  // 禁用默认构造函数
     ~Database();
-    Database(std::string_view wal_path = "kvdb.wal");
+    Database(std::string_view wal_path = "kvdb.wal",
+             std::string_view snapshot_path = "kvdb.snapshot");
     // 禁用拷贝和移动构造函数
     // 禁用拷贝和移动赋值运算符
     Database(const Database&) = delete;
@@ -65,15 +68,42 @@ class Database {
         return wal_.replay(handler);
     }
 
+    // 快照相关操作
+
+    /**
+     * @brief 创建数据快照
+     * @return 是否成功
+     */
+    bool createSnapshot();
+
+    /**
+     * @brief 设置快照配置
+     * @param config 快照配置
+     */
+    void setSnapshotConfig(const SnapshotConfig& config);
+
+    /**
+     * @brief 获取当前快照配置
+     * @return 快照配置
+     */
+    const SnapshotConfig& getSnapshotConfig() const;
+
+    /**
+     * @brief 检查是否存在快照文件
+     * @return 是否存在
+     */
+    bool hasSnapshot() const;
+
   private:
     std::unordered_map<std::string, std::string> data_;
     mutable std::mutex mutex_;
 
-    Wal wal_;  // WAL实例，用于持久化操作
-    enum class OpType : uint8_t { PUT, REMOVE, CLEAR };
+    Wal wal_;                           // WAL实例，用于持久化操作
+    Snapshot snapshot_;                 // 快照实例，用于快照功能
+    RecoveryManager recovery_manager_;  // 恢复管理器
+    SnapshotManager snapshot_manager_;  // 快照管理器
 
-    // 从WAL文件恢复数据
-    void recoverFromWal();
+    enum class OpType : uint8_t { PUT, REMOVE, CLEAR };
 };
 
 }  // namespace kvdb

@@ -1,4 +1,4 @@
-#include "kvdb/sinks/console_sink.h"
+#include "kvdb/logging/sinks/console_sink.h"
 
 #include <iostream>
 namespace kvdb {

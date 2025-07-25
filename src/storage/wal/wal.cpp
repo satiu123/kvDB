@@ -1,4 +1,4 @@
-#include "kvdb/wal/wal.h"
+#include "kvdb/storage/wal/wal.h"
 
 #include <cstdio>
 #include <cstring>
@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-#include "kvdb/log.h"
+#include "kvdb/logging/log.h"
 
 namespace kvdb {
 

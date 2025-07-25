@@ -3,7 +3,7 @@
 
 #include <source_location>
 
-#include "kvdb/logger.h"  // 内部宏也需要 logger.h
+#include "kvdb/logging/logger.h"  // 内部宏也需要 logger.h
 
 // 将实现细节放在 detail 命名空间中
 

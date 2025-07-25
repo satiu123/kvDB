@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-#include "kvdb/log.h"
+#include "kvdb/logging/log.h"
 
 // 测试日志系统的使用
 TEST(LoggerTest, BasicLogFunctionality) {

@@ -1,9 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "kvdb/database.h"
+#include "kvdb/core/database.h"
 
 TEST(DatabaseTest, BasicOperations) {
-    kvdb::Database db("kvdb.wal");
+    // kvdb::Database db("kvdb.wal");
+    kvdb::Database db;
 
     // 测试 put 和 get
     EXPECT_TRUE(db.put("key1", "value1"));

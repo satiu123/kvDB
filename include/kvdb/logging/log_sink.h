@@ -1,7 +1,7 @@
 #ifndef KVDB_LOG_SINK_H
 #define KVDB_LOG_SINK_H
 
-#include "kvdb/log_types.h"  // 依赖核心类型
+#include "kvdb/logging/log_types.h"  // 依赖核心类型
 
 namespace kvdb {
 
