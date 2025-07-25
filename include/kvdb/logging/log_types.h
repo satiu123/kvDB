@@ -32,6 +32,9 @@ class LogRecord {
 
     std::string convertTimeStamp(std::chrono::system_clock::time_point ts) const;
     [[nodiscard]] std::string toString() const;
+    [[nodiscard]] const std::string& getMessage() const {
+        return message_;
+    }
 
   private:
     LogLevel level_;

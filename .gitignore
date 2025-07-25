@@ -9,3 +9,6 @@ build
 
 # wal files
 *.wal
+
+# snapshot files
+*.snapshot
