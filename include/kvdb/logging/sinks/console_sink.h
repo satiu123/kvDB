@@ -3,7 +3,7 @@
 
 #include <mutex>
 
-#include "kvdb/logging/log_sink.h"  // 依赖 Sink 接口
+#include "kvdb/logging/sinks/log_sink.h"  // 依赖 Sink 接口
 
 namespace kvdb {
 // 控制台日志记录器

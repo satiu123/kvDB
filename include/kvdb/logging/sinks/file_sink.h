@@ -5,7 +5,7 @@
 #include <mutex>
 #include <string_view>
 
-#include "kvdb/logging/log_sink.h"  // 依赖 Sink 接口
+#include "kvdb/logging/sinks/log_sink.h"  // 依赖 Sink 接口
 
 namespace kvdb {
 
