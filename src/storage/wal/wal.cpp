@@ -89,7 +89,7 @@ bool Wal::open(bool truncate) {
     }
 
     // 设置打开模式
-    std::ios_base::openmode mode = std::ios::binary | std::ios::in | std::ios::out;
+    std::ios_base::openmode mode = std::ios::binary | std::ios::in | std::ios::out | std::ios::ate;
 
     if (truncate) {
         mode |= std::ios::trunc;  // 截断文件
@@ -123,6 +123,7 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
         return false;
     }
 
+    auto current_pos = file_.tellg();
     // 移动到文件开头
     file_.seekg(0, std::ios::beg);
 
@@ -141,7 +142,7 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
         LOG_ERROR("读取WAL文件时发生错误: {}", path_);
         return false;
     }
-
+    file_.seekg(current_pos);  // 恢复到原来的位置
     return true;
 }
 
@@ -249,4 +250,30 @@ void Wal::close() {
     }
 }
 
+// 获取格式化的WAL内容
+std::expected<std::vector<std::string>, std::string> Wal::getFormattedContent() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_open_) {
+        return std::unexpected("WAL文件未打开");
+    }
+    if (isEmpty()) {
+        return std::unexpected("WAL文件为空");
+    }
+    std::vector<std::string> formatted_lines;
+    auto* this_ptr = const_cast<Wal*>(this);
+    std::fstream::pos_type current_pos = this_ptr->file_.tellg();
+    this_ptr->file_.seekg(0, std::ios::beg);
+    while (true) {
+        auto record = this_ptr->readNextRecord();
+        if (!record) {
+            break;  // 到达文件末尾或读取错误
+        }
+        formatted_lines.emplace_back(record->toString());
+    }
+    this_ptr->file_.seekg(current_pos);  // 恢复文件位置
+    if (formatted_lines.empty()) {
+        return std::unexpected("WAL文件内容格式化失败");
+    }
+    return formatted_lines;
+}
 }  // namespace kvdb

@@ -110,6 +110,16 @@ bool Database::exists(std::string_view key) const {
     return data_.contains(key.data());
 }
 
+std::vector<std::string> Database::keys() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> keys;
+    keys.reserve(data_.size());
+    for (const auto& pair : data_) {
+        keys.push_back(pair.first);
+    }
+    return keys;
+}
+
 // 创建快照
 bool Database::createSnapshot() {
     std::lock_guard<std::mutex> lock(mutex_);

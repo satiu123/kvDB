@@ -1,11 +1,13 @@
 #ifndef WAL_H
 #define WAL_H
 
+#include <expected>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "kvdb/storage/wal/wal_record.h"
 
@@ -94,12 +96,17 @@ class Wal {
      * @brief 关闭WAL文件
      */
     void close();
+    /**
+     * @brief 获取格式化的WAL内容
+     * @return 格式化的WAL内容字符串数组
+     */
+    std::expected<std::vector<std::string>, std::string> getFormattedContent() const;
 
   private:
-    std::string path_;      // WAL文件路径
-    std::fstream file_;     // WAL文件流
-    std::mutex mutex_;      // 互斥锁，用于保护并发访问
-    bool is_open_ = false;  // WAL文件是否打开
+    std::string path_;          // WAL文件路径
+    std::fstream file_;         // WAL文件流
+    mutable std::mutex mutex_;  // 互斥锁，用于保护并发访问
+    bool is_open_ = false;      // WAL文件是否打开
 
     /**
      * @brief 打开WAL文件

@@ -1,6 +1,7 @@
 #ifndef KVDB_DATABASE_H
 #define KVDB_DATABASE_H
 
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -68,6 +69,20 @@ class Database {
         return wal_.replay(handler);
     }
 
+    /*
+     * @brief 输出所有WAL记录
+     */
+    void printWALRecords() const {
+        auto records = wal_.getFormattedContent();
+        if (records) {
+            for (const auto& record : *records) {
+                std::cout << record << std::endl;
+            }
+        } else {
+            std::cerr << "获取WAL记录失败: " << records.error() << std::endl;
+        }
+    }
+
     // 快照相关操作
 
     /**
@@ -93,6 +108,12 @@ class Database {
      * @return 是否存在
      */
     bool hasSnapshot() const;
+
+    /*
+     * @brief 返回所有key
+     * @return 所有key的列表
+     */
+    std::vector<std::string> keys() const;
 
   private:
     std::unordered_map<std::string, std::string> data_;

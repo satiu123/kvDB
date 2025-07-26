@@ -181,6 +181,12 @@ size_t WalRecord::size() const {
     return HEADER_SIZE + key_.size() + value_.size();
 }
 
+// 获取记录的字符串表示
+std::string WalRecord::toString() const {
+    return std::format("WalRecord(op_type={}, key='{}', value='{}')", static_cast<int>(op_type_),
+                       key_, value_);
+}
+
 // 计算记录的CRC32校验和
 uint32_t WalRecord::calculateChecksum() const {
     uint32_t crc = 0xFFFFFFFF;

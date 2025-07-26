@@ -47,6 +47,12 @@ class WalRecord {
         return value_;
     }
 
+    /*
+     * @brief 获取记录的字符串表示
+     * @return 格式化的字符串表示
+     */
+    std::string toString() const;
+
     // 获取记录头部大小
     static constexpr size_t getHeaderSize() {
         return HEADER_SIZE;

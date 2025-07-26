@@ -19,9 +19,6 @@ Checks: >
   performance-*,        # Checks for performance anti-patterns.
   portability-*,        # Checks for portability issues.
   readability-*         # Checks for code readability.
-
-# 3. Disable specific checks that are too noisy or conflict with our idioms.
-DisabledChecks: >
   -modernize-use-trailing-return-type, # Trailing return type is often a matter of style, not necessity.
   -google-readability-todo,            # Allows using TODO comments without specific formatting.
   -readability-identifier-length,      # Allows short identifiers like 'i', 'db', 'fd', which are common.
@@ -72,4 +69,3 @@ CheckOptions:
   - { key: modernize-use-emplace.ContainerSet, value: 'std::vector;std::list;std::deque' } # Specify which containers should prefer emplace.
   - { key: modernize-use-override.AllowOverrideAndFinal, value: 1 } # Enforce 'override' or 'final' on virtual methods.
   - { key: performance-unnecessary-value-param.AllowedTypes, value: 'trivial_string_view;QVariant' } # Add types that are cheap to copy.
-...
