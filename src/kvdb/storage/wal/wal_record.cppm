@@ -1,0 +1,1 @@
+export module kvdb.storage.wal;

@@ -1,6 +1,6 @@
-#include "kvdb/logging/logger.h"
+module kvdb.logging.log;
 
-namespace kvdb {
+import std;
 
 Logger& Logger::getInstance() {
     static Logger instance;  // 使用局部静态变量确保单例
@@ -22,4 +22,3 @@ void kvdb::Logger::setLevel(LogLevel level) {
 bool kvdb::Logger::shouldLog(LogLevel level) const {
     return level >= level_;
 }
-}  // namespace kvdb

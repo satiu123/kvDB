@@ -1,0 +1,1 @@
+module kvdb.logging.sinks;

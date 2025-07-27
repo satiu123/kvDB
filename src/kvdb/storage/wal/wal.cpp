@@ -1,10 +1,7 @@
-#include "kvdb/storage/wal/wal.h"
+module kvdb.storage.wal;
 
-#include <cstdio>
-#include <cstring>
-#include <filesystem>
-#include <iostream>
-#include <vector>
+import std;
+
 
 #include "kvdb/logging/log.h"
 

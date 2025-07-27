@@ -1,5 +1,6 @@
-#include "kvdb/logging/log_types.h"
-namespace kvdb {
+module kvdb.logging.log;
+import std;
+
 
 kvdb::LogRecord::LogRecord(LogLevel lvl, std::chrono::system_clock::time_point ts, std::string msg,
                            std::string src, int line)
@@ -16,5 +17,3 @@ std::string kvdb::LogRecord::toString() const {
     return std::format(FORMATSTR, timestamp_, logLevelToString(level_), sourceFile_, lineNumber_,
                        message_);
 }
-
-}  // namespace kvdb

@@ -1,9 +1,6 @@
-#include "kvdb/storage/wal/wal_record.h"
+module kvdb.storage.wal;
 
-#include <cassert>
-#include <cstring>
-#include <stdexcept>
-
+import std;
 #include "kvdb/logging/log.h"
 
 namespace kvdb {
