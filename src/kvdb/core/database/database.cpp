@@ -2,8 +2,8 @@ module kvdb.core.database;
 import std;
 import kvdb.logging.log;
 
-using kvdb::core::Database, kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR,
-    kvdb::logging::LOG_INFO, kvdb::logging::LOG_WARNING;
+using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
+    kvdb::logging::LOG_WARNING;
 
 namespace kvdb::core {
 Database::Database(std::string_view wal_path, std::string_view snapshot_path)

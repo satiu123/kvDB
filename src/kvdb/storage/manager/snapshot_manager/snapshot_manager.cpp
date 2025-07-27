@@ -1,7 +1,6 @@
 module kvdb.storage.manager.snapshot_manager;
 import kvdb.logging.log;
-using kvdb::storage::SnapshotManager, kvdb::storage::SnapshotConfig, kvdb::logging::LOG_INFO,
-    kvdb::logging::LOG_ERROR, kvdb::logging::LOG_WARNING;
+using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_WARNING;
 
 namespace kvdb::storage {
 SnapshotManager::SnapshotManager(Wal& wal, Snapshot& snapshot)

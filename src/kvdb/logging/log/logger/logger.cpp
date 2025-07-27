@@ -1,7 +1,6 @@
 module kvdb.logging.log.logger;
 
 import std;
-using kvdb::logging::Logger;
 
 namespace kvdb::logging {
 Logger& Logger::getInstance() {
