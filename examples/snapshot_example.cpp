@@ -1,18 +1,13 @@
-#include <chrono>
-#include <iostream>
-#include <thread>
+import std;
 
-#include "kvdb/core/database.h"
-#include "kvdb/storage/snapshot_manager.h"
+import kvdb;
 
 int main() {
     // 创建数据库实例
-    kvdb::Database db("example.wal", "example.snapshot");
-
+    kvdb::core::Database db("example.wal", "example.snapshot");
     std::cout << "=== KvDB 快照示例 ===" << std::endl;
-
     // 配置自动快照
-    kvdb::SnapshotConfig config;
+    kvdb::storage::SnapshotConfig config;
     config.auto_snapshot_enabled = true;
     config.operation_count_threshold = 5;            // 5个操作后自动创建快照
     config.time_interval = std::chrono::minutes(1);  // 1分钟间隔

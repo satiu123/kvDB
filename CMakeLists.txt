@@ -10,10 +10,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -stdlib=libc++")
 
 # 启用模块支持
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fmodules-cache-path=${CMAKE_BINARY_DIR}/module_cache")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fmodules-cache-path=${CMAKE_BINARY_DIR}/module_cache")
 
-set(STD_PCM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/include/stdm/std.pcm")
-set(STD_COMPAT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/include/stdm/std.compat.pcm")
+set(STD_PCM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/stdm/std.pcm")
+set(STD_COMPAT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/stdm/std.compat.pcm")
 # 添加模块文件标志
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodule-file=std=${STD_PCM_PATH} -fmodule-file=std.compat=${STD_COMPAT_PATH}")
 

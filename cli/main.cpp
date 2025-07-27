@@ -1,9 +1,8 @@
-#include <iostream>
-#include <string>
-#include <vector>
+import std;
+import std.compat;
 
-#include "kvdb/core/database.h"
-#include "kvdb/logging/log.h"
+import kvdb;
+
 
 void print_usage() {
     std::cout << "Commands:" << std::endl;
@@ -19,13 +18,12 @@ void print_usage() {
 }
 
 int main() {
-    kvdb::Database db("kvdb.wal");
-    kvdb::Logger::getInstance().setLevel(kvdb::LogLevel::DEBUG);
-    kvdb::Logger::getInstance().addSink(std::make_shared<kvdb::FileSink>("kvdb.log"));
+    kvdb::core::Database db("kvdb.wal");
+    kvdb::logging::Logger::getInstance().addSink(
+        std::make_shared<kvdb::logging::FileSink>("kvdb.log"));
     std::cout << "Welcome to kvDB CLI!" << std::endl;
     std::cout << "Type 'help' for available commands." << std::endl;
     std::cout << std::endl;
-
     std::string input;
     while (true) {
         std::cout << "kvdb> ";
