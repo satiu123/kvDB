@@ -23,25 +23,33 @@ class LOG_BASE {
 class LOG_DEBUG : public LOG_BASE<LOG_DEBUG> {
   public:
     static constexpr LogLevel LEVEL = LogLevel::DEBUG;
-    using LOG_BASE<LOG_DEBUG>::LOG_BASE;  // 继承构造函数
+    LOG_DEBUG(std::source_location loc = std::source_location::current())
+        : LOG_BASE<LOG_DEBUG>(loc) {}       // 使用基类构造函数
+    using LOG_BASE<LOG_DEBUG>::operator();  // 继承基类的操作
 };
 
 class LOG_INFO : public LOG_BASE<LOG_INFO> {
   public:
     static constexpr LogLevel LEVEL = LogLevel::INFO;
-    using LOG_BASE<LOG_INFO>::LOG_BASE;
+    LOG_INFO(std::source_location loc = std::source_location::current())
+        : LOG_BASE<LOG_INFO>(loc) {}       // 使用基类构造函数
+    using LOG_BASE<LOG_INFO>::operator();  // 继承基类的操作
 };
 
 class LOG_WARNING : public LOG_BASE<LOG_WARNING> {
   public:
     static constexpr LogLevel LEVEL = LogLevel::WARNING;
-    using LOG_BASE<LOG_WARNING>::LOG_BASE;
+    LOG_WARNING(std::source_location loc = std::source_location::current())
+        : LOG_BASE<LOG_WARNING>(loc) {}       // 使用基类构造函数
+    using LOG_BASE<LOG_WARNING>::operator();  // 继承基类的操作
 };
 
 class LOG_ERROR : public LOG_BASE<LOG_ERROR> {
   public:
     static constexpr LogLevel LEVEL = LogLevel::ERROR;
-    using LOG_BASE<LOG_ERROR>::LOG_BASE;
+    LOG_ERROR(std::source_location loc = std::source_location::current())
+        : LOG_BASE<LOG_ERROR>(loc) {}       // 使用基类构造函数
+    using LOG_BASE<LOG_ERROR>::operator();  // 继承基类的操作
 };
 
 }  // namespace kvdb::logging

@@ -30,7 +30,7 @@ bool Database::put(std::string_view key, std::string_view value) {
 
     // 2. 再修改内存数据
     data_[key.data()] = value.data();
-    // LOG_DEBUG()("PUT操作成功: key={}, value={}", key, value);
+    LOG_DEBUG()("PUT操作成功: key={}, value={}", key, value);
 
     // 3. 记录操作并检查是否需要自动快照
     snapshot_manager_.recordOperation();
