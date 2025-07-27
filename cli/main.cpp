@@ -1,14 +1,7 @@
 import std;
 import std.compat;
 
-import kvdb.core.database;
-import kvdb.logging.log.log_impl;
-import kvdb.logging.log.logger;
-import kvdb.logging.log.log_record;
-
-
-import kvdb.logging.sinks.file_sink;
-import kvdb.logging.sinks.console_sink;
+import kvdb;
 
 
 void print_usage() {
@@ -25,9 +18,9 @@ void print_usage() {
 }
 
 int main() {
-    kvdb::Database db("kvdb.wal");
-    kvdb::logging::Logger::getInstance().setLevel(kvdb::logging::LogLevel::DEBUG);
-    kvdb::logging::Logger::getInstance().addSink(std::make_shared<kvdb::FileSink>("kvdb.log"));
+    kvdb::core::Database db("kvdb.wal");
+    kvdb::logging::Logger::getInstance().addSink(
+        std::make_shared<kvdb::logging::FileSink>("kvdb.log"));
     std::cout << "Welcome to kvDB CLI!" << std::endl;
     std::cout << "Type 'help' for available commands." << std::endl;
     std::cout << std::endl;

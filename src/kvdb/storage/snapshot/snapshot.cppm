@@ -1,8 +1,8 @@
-export module kvdb.storage.snapshot.snapshot;
+export module kvdb.storage.snapshot;
 
 import std;
 
-export namespace kvdb {
+export namespace kvdb::storage {
 
 /**
  * @brief 快照文件格式版本
@@ -118,4 +118,4 @@ class Snapshot {
     bool readString(std::ifstream& file, std::string& str) const;
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::storage

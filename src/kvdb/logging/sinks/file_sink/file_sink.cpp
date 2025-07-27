@@ -1,19 +1,19 @@
 module kvdb.logging.sinks.file_sink;
-namespace kvdb {
+namespace kvdb::logging {
 
-kvdb::FileSink::FileSink(std::string_view filePath) : filePath_(filePath) {
+FileSink::FileSink(std::string_view filePath) : filePath_(filePath) {
     fileStream_.open(filePath_, std::ios::app);
     if (!fileStream_) {
         throw std::runtime_error("Failed to open log file: " + filePath_);
     }
 }
-kvdb::FileSink::~FileSink() {
+FileSink::~FileSink() {
     if (fileStream_.is_open()) {
         fileStream_.close();
     }
 }
 // 文件日志记录器实现
-void kvdb::FileSink::log(const logging::LogRecord& record) {
+void FileSink::log(const logging::LogRecord& record) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (fileStream_) {
         fileStream_ << record.toString() << '\n';
@@ -22,7 +22,7 @@ void kvdb::FileSink::log(const logging::LogRecord& record) {
     }
 }
 // 刷新文件流
-void kvdb::FileSink::flush() {
+void FileSink::flush() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (fileStream_) {
         fileStream_.flush();
@@ -30,4 +30,4 @@ void kvdb::FileSink::flush() {
         throw std::runtime_error("Log file stream is not open: " + filePath_);
     }
 }
-}  // namespace kvdb
+}  // namespace kvdb::logging

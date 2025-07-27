@@ -1,8 +1,11 @@
 module kvdb.core.database;
 import std;
-import kvdb.logging.log.log_impl;
-using kvdb::Database, kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
-    kvdb::logging::LOG_WARNING;
+import kvdb.logging.log;
+
+using kvdb::core::Database, kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR,
+    kvdb::logging::LOG_INFO, kvdb::logging::LOG_WARNING;
+
+namespace kvdb::core {
 Database::Database(std::string_view wal_path, std::string_view snapshot_path)
     : wal_(wal_path),
       snapshot_(snapshot_path),
@@ -120,13 +123,13 @@ bool Database::createSnapshot() {
 }
 
 // 设置快照配置
-void Database::setSnapshotConfig(const SnapshotConfig& config) {
+void Database::setSnapshotConfig(const storage::SnapshotConfig& config) {
     std::lock_guard<std::mutex> lock(mutex_);
     snapshot_manager_.setConfig(config);
 }
 
 // 获取快照配置
-const kvdb::SnapshotConfig& Database::getSnapshotConfig() const {
+const storage::SnapshotConfig& Database::getSnapshotConfig() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return snapshot_manager_.getConfig();
 }
@@ -135,3 +138,4 @@ const kvdb::SnapshotConfig& Database::getSnapshotConfig() const {
 bool Database::hasSnapshot() const {
     return snapshot_manager_.hasSnapshot();
 }
+}  // namespace kvdb::core

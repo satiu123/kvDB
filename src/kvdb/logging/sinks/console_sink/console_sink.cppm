@@ -6,7 +6,7 @@ import kvdb.logging.sinks.log_sink;
 import kvdb.logging.log.log_record;
 
 
-export namespace kvdb {
+export namespace kvdb::logging {
 // 控制台日志记录器
 class ConsoleSink : public LogSink {
   public:
@@ -21,4 +21,4 @@ class ConsoleSink : public LogSink {
   private:
     std::mutex mutex_;  // 确保线程安全
 };
-}  // namespace kvdb
+}  // namespace kvdb::logging

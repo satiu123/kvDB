@@ -1,9 +1,9 @@
 export module kvdb.storage.manager.recovery_manager;
 
 import std;
-import kvdb.storage.wal.wal;
-import kvdb.storage.snapshot.snapshot;
-export namespace kvdb {
+import kvdb.storage.wal;
+import kvdb.storage.snapshot;
+export namespace kvdb::storage {
 
 /**
  * @brief 数据恢复管理器
@@ -53,4 +53,4 @@ class RecoveryManager {
     bool replayWalRecords(std::unordered_map<std::string, std::string>& data);
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::storage

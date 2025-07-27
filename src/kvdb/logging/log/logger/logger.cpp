@@ -3,6 +3,7 @@ module kvdb.logging.log.logger;
 import std;
 using kvdb::logging::Logger;
 
+namespace kvdb::logging {
 Logger& Logger::getInstance() {
     static Logger instance;  // 使用局部静态变量确保单例
     return instance;
@@ -23,3 +24,4 @@ void Logger::setLevel(LogLevel level) {
 bool Logger::shouldLog(LogLevel level) const {
     return level >= level_;
 }
+}  // namespace kvdb::logging

@@ -1,9 +1,9 @@
-export module kvdb.storage.wal.wal;
+export module kvdb.storage.wal;
 
 import std;
-import kvdb.storage.wal.wal_record;
+export import kvdb.storage.wal.wal_record;
 
-export namespace kvdb {
+export namespace kvdb::storage {
 
 /**
  * @brief 预写式日志(Write-Ahead Log)类
@@ -114,4 +114,4 @@ class Wal {
     std::unique_ptr<WalRecord> readNextRecord();
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::storage

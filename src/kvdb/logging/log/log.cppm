@@ -1,8 +1,8 @@
-export module kvdb.logging.log.log_impl;
+export module kvdb.logging.log;
 
 import std;
-import kvdb.logging.log.logger;
-import kvdb.logging.log.log_record;
+export import kvdb.logging.log.logger;
+export import kvdb.logging.log.log_record;
 export namespace kvdb::logging {
 // 使用CRTP的基类
 class LOG_BASE {

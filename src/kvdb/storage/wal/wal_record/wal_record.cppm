@@ -2,7 +2,7 @@ export module kvdb.storage.wal.wal_record;
 
 
 import std;
-export namespace kvdb {
+export namespace kvdb::storage {
 
 // WAL记录操作类型
 enum class WalOpType : std::uint8_t {
@@ -69,4 +69,4 @@ class WalRecord {
         17;  // 1(op_type) + 4(key_size) + 4(value_size) + 4(checksum) + 4(total_size)
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::storage

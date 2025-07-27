@@ -1,9 +1,9 @@
-module kvdb.storage.wal.wal;
+module kvdb.storage.wal;
 
 import std;
-import kvdb.logging.log.log_impl;
+import kvdb.logging.log;
 using kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
-namespace kvdb {
+namespace kvdb::storage {
 
 // 构造函数
 Wal::Wal(std::string_view path) : path_(path) {
@@ -271,4 +271,4 @@ std::expected<std::vector<std::string>, std::string> Wal::getFormattedContent() 
     }
     return formatted_lines;
 }
-}  // namespace kvdb
+}  // namespace kvdb::storage

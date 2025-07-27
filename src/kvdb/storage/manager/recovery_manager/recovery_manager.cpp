@@ -1,8 +1,9 @@
 module kvdb.storage.manager.recovery_manager;
-import kvdb.logging.log.log_impl;
+import kvdb.logging.log;
 import kvdb.storage.wal.wal_record;
-using kvdb::RecoveryManager, kvdb::Wal, kvdb::Snapshot, kvdb::logging::LOG_INFO,
-    kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
+using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
+
+namespace kvdb::storage {
 RecoveryManager::RecoveryManager(Wal& wal, Snapshot& snapshot) : wal_(wal), snapshot_(snapshot) {}
 
 bool RecoveryManager::recover(std::unordered_map<std::string, std::string>& data) {
@@ -85,3 +86,4 @@ bool RecoveryManager::replayWalRecords(std::unordered_map<std::string, std::stri
 
     return success;
 }
+}  // namespace kvdb::storage

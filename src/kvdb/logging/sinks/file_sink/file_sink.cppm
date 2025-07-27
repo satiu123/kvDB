@@ -3,7 +3,7 @@ export module kvdb.logging.sinks.file_sink;
 import std;
 import kvdb.logging.sinks.log_sink;
 import kvdb.logging.log.log_record;
-export namespace kvdb {
+export namespace kvdb::logging {
 
 // 文件日志记录器
 class FileSink : public LogSink {
@@ -20,4 +20,4 @@ class FileSink : public LogSink {
     void flush() override;                                // 刷新文件流
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::logging

@@ -1,12 +1,13 @@
-#include <iostream>
+import std;
 
-#include "kvdb.h"  // 使用新的简化包含文件
+import kvdb;
+
 
 int main() {
     std::cout << "=== 测试新的文件结构 ===" << std::endl;
 
     // 创建数据库实例
-    kvdb::Database db("structure_test.wal", "structure_test.snapshot");
+    kvdb::core::Database db("structure_test.wal", "structure_test.snapshot");
 
     // 基本操作
     db.put("module", "core");

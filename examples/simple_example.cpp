@@ -1,18 +1,12 @@
 import std;
 import std.compat;
 
-import kvdb.core.database;
-import kvdb.logging.log.log_impl;
-import kvdb.logging.log.logger;
-import kvdb.logging.log.log_record;
+import kvdb;
 
-
-import kvdb.logging.sinks.file_sink;
-import kvdb.logging.sinks.console_sink;
 using kvdb::logging::LOG_INFO, kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR;
 int main() {
-    kvdb::Database db("kvdb.wal");
-    kvdb::logging::Logger::getInstance().addSink(std::make_shared<kvdb::ConsoleSink>());
+    kvdb::core::Database db("kvdb.wal");
+    kvdb::logging::Logger::getInstance().addSink(std::make_shared<kvdb::logging::ConsoleSink>());
     // 存储一些键值对
     db.put("name", "kvDB");
     db.put("version", "0.1.0");

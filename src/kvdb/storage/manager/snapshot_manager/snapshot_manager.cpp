@@ -1,7 +1,9 @@
 module kvdb.storage.manager.snapshot_manager;
-import kvdb.logging.log.log_impl;
-using kvdb::SnapshotManager, kvdb::SnapshotConfig, kvdb::logging::LOG_INFO,
+import kvdb.logging.log;
+using kvdb::storage::SnapshotManager, kvdb::storage::SnapshotConfig, kvdb::logging::LOG_INFO,
     kvdb::logging::LOG_ERROR, kvdb::logging::LOG_WARNING;
+
+namespace kvdb::storage {
 SnapshotManager::SnapshotManager(Wal& wal, Snapshot& snapshot)
     : wal_(wal), snapshot_(snapshot), last_snapshot_time_(std::chrono::steady_clock::now()) {}
 
@@ -80,3 +82,4 @@ void SnapshotManager::resetCounters() {
     operations_since_snapshot_ = 0;
     last_snapshot_time_ = std::chrono::steady_clock::now();
 }
+}  // namespace kvdb::storage

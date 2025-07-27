@@ -1,9 +1,9 @@
 export module kvdb.storage.manager.snapshot_manager;
 
 import std;
-import kvdb.storage.wal.wal;
-import kvdb.storage.snapshot.snapshot;
-export namespace kvdb {
+import kvdb.storage.wal;
+import kvdb.storage.snapshot;
+export namespace kvdb::storage {
 
 /**
  * @brief 快照配置
@@ -80,4 +80,4 @@ class SnapshotManager {
     void resetCounters();
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::storage

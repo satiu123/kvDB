@@ -1,15 +1,15 @@
 export module kvdb.core.database;
 
 import std;
-import kvdb.storage.wal.wal;
+import kvdb.storage.wal;
 import kvdb.storage.wal.wal_record;
 
-import kvdb.storage.snapshot.snapshot;
+import kvdb.storage.snapshot;
 import kvdb.storage.manager.recovery_manager;
 import kvdb.storage.manager.snapshot_manager;
 
 
-export namespace kvdb {
+export namespace kvdb::core {
 
 class Database {
   public:
@@ -62,7 +62,7 @@ class Database {
 
     bool exists(std::string_view key) const;
 
-    bool replayWAL(const std::function<bool(const WalRecord&)>& handler) {
+    bool replayWAL(const std::function<bool(const storage::WalRecord&)>& handler) {
         return wal_.replay(handler);
     }
 
@@ -92,13 +92,13 @@ class Database {
      * @brief 设置快照配置
      * @param config 快照配置
      */
-    void setSnapshotConfig(const SnapshotConfig& config);
+    void setSnapshotConfig(const storage::SnapshotConfig& config);
 
     /**
      * @brief 获取当前快照配置
      * @return 快照配置
      */
-    const SnapshotConfig& getSnapshotConfig() const;
+    const storage::SnapshotConfig& getSnapshotConfig() const;
 
     /**
      * @brief 检查是否存在快照文件
@@ -116,12 +116,12 @@ class Database {
     std::unordered_map<std::string, std::string> data_;
     mutable std::mutex mutex_;
 
-    Wal wal_;                           // WAL实例，用于持久化操作
-    Snapshot snapshot_;                 // 快照实例，用于快照功能
-    RecoveryManager recovery_manager_;  // 恢复管理器
-    SnapshotManager snapshot_manager_;  // 快照管理器
+    storage::Wal wal_;                           // WAL实例，用于持久化操作
+    storage::Snapshot snapshot_;                 // 快照实例，用于快照功能
+    storage::RecoveryManager recovery_manager_;  // 恢复管理器
+    storage::SnapshotManager snapshot_manager_;  // 快照管理器
 
     enum class OpType : std::uint8_t { PUT, REMOVE, CLEAR };
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::core

@@ -1,9 +1,9 @@
 module kvdb.storage.wal.wal_record;
 
 import std;
-import kvdb.logging.log.log_impl;
+import kvdb.logging.log;
 using kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
-namespace kvdb {
+namespace kvdb::storage {
 
 // CRC32校验和表
 static constexpr std::uint32_t crc32_table[256] = {
@@ -209,4 +209,4 @@ bool WalRecord::validateChecksum() const {
     return calculateChecksum() == checksum_;
 }
 
-}  // namespace kvdb
+}  // namespace kvdb::storage
