@@ -24,7 +24,6 @@ int main() {
     std::cout << "Welcome to kvDB CLI!" << std::endl;
     std::cout << "Type 'help' for available commands." << std::endl;
     std::cout << std::endl;
-
     std::string input;
     while (true) {
         std::cout << "kvdb> ";

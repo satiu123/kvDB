@@ -6,7 +6,6 @@ int main() {
     // 创建数据库实例
     kvdb::core::Database db("example.wal", "example.snapshot");
     std::cout << "=== KvDB 快照示例 ===" << std::endl;
-
     // 配置自动快照
     kvdb::storage::SnapshotConfig config;
     config.auto_snapshot_enabled = true;
