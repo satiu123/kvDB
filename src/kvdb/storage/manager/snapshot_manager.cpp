@@ -1,38 +1,36 @@
-#include "kvdb/storage/snapshot_manager.h"
-
-#include "kvdb/logging/log.h"
-
-namespace kvdb {
-
+module kvdb.storage.manager.snapshot_manager;
+import kvdb.logging.log.log_impl;
+using kvdb::SnapshotManager, kvdb::SnapshotConfig, kvdb::logging::LOG_INFO,
+    kvdb::logging::LOG_ERROR, kvdb::logging::LOG_WARNING;
 SnapshotManager::SnapshotManager(Wal& wal, Snapshot& snapshot)
     : wal_(wal), snapshot_(snapshot), last_snapshot_time_(std::chrono::steady_clock::now()) {}
 
 bool SnapshotManager::createSnapshot(const std::unordered_map<std::string, std::string>& data) {
-    LOG_INFO("开始创建数据快照...");
+    LOG_INFO()("开始创建数据快照...");
 
     // TODO: 获取当前WAL文件大小或偏移量
-    uint64_t wal_offset = 0;
+    std::uint64_t wal_offset = 0;
 
     if (!snapshot_.create(data, wal_offset)) {
-        LOG_ERROR("创建快照失败");
+        LOG_ERROR()("创建快照失败");
         return false;
     }
 
     // 快照创建成功后，可以截断WAL文件
     if (!wal_.truncate()) {
-        LOG_WARNING("截断WAL文件失败，但快照已创建成功");
+        LOG_WARNING()("截断WAL文件失败，但快照已创建成功");
     }
 
     // 重置计数器和时间
     resetCounters();
 
-    LOG_INFO("快照创建成功");
+    LOG_INFO()("快照创建成功");
     return true;
 }
 
 void SnapshotManager::setConfig(const SnapshotConfig& config) {
     config_ = config;
-    LOG_INFO("快照配置已更新");
+    LOG_INFO()("快照配置已更新");
 }
 
 const SnapshotConfig& SnapshotManager::getConfig() const {
@@ -56,7 +54,7 @@ bool SnapshotManager::checkAutoSnapshot(const std::unordered_map<std::string, st
 
     // 检查操作数量阈值
     if (operations_since_snapshot_ >= config_.operation_count_threshold) {
-        LOG_INFO("操作数量达到阈值 ({})，准备创建快照", config_.operation_count_threshold);
+        LOG_INFO()("操作数量达到阈值 ({})，准备创建快照", config_.operation_count_threshold);
         should_snapshot = true;
     }
 
@@ -64,7 +62,7 @@ bool SnapshotManager::checkAutoSnapshot(const std::unordered_map<std::string, st
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(now - last_snapshot_time_);
     if (elapsed >= config_.time_interval) {
-        LOG_INFO("时间间隔达到阈值 ({} 分钟)，准备创建快照", config_.time_interval.count());
+        LOG_INFO()("时间间隔达到阈值 ({} 分钟)，准备创建快照", config_.time_interval.count());
         should_snapshot = true;
     }
 
@@ -82,5 +80,3 @@ void SnapshotManager::resetCounters() {
     operations_since_snapshot_ = 0;
     last_snapshot_time_ = std::chrono::steady_clock::now();
 }
-
-}  // namespace kvdb

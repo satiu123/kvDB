@@ -1,10 +1,8 @@
-module kvdb.storage.wal;
+module kvdb.storage.wal.wal;
 
 import std;
-
-
-#include "kvdb/logging/log.h"
-
+import kvdb.logging.log.log_impl;
+using kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
 namespace kvdb {
 
 // 构造函数
@@ -40,7 +38,7 @@ bool Wal::appendRecord(const WalRecord& record) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (!is_open_ && !open(false)) {
-        LOG_ERROR("无法打开WAL文件: {}", path_);
+        LOG_ERROR()("无法打开WAL文件: {}", path_);
         return false;
     }
 
@@ -55,7 +53,7 @@ bool Wal::appendRecord(const WalRecord& record) {
 
     // 检查写入是否成功
     if (file_.fail()) {
-        LOG_ERROR("写入WAL记录失败: {}", path_);
+        LOG_ERROR()("写入WAL记录失败: {}", path_);
         return false;
     }
 
@@ -105,7 +103,7 @@ bool Wal::open(bool truncate) {
     is_open_ = file_.is_open();
 
     if (!is_open_) {
-        LOG_ERROR("无法打开WAL文件: {}", path_);
+        LOG_ERROR()("无法打开WAL文件: {}", path_);
     }
 
     return is_open_;
@@ -116,7 +114,7 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (!is_open_ && !open(false)) {
-        LOG_ERROR("无法打开WAL文件进行重放: {}", path_);
+        LOG_ERROR()("无法打开WAL文件进行重放: {}", path_);
         return false;
     }
 
@@ -129,14 +127,14 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
     while ((record = readNextRecord()) != nullptr) {
         // 调用处理器处理记录
         if (!handler(*record)) {
-            LOG_ERROR("处理WAL记录时失败");
+            LOG_ERROR()("处理WAL记录时失败");
             return false;
         }
     }
 
     // 检查是否因为读取错误而退出
     if (file_.bad()) {
-        LOG_ERROR("读取WAL文件时发生错误: {}", path_);
+        LOG_ERROR()("读取WAL文件时发生错误: {}", path_);
         return false;
     }
     file_.seekg(current_pos);  // 恢复到原来的位置
@@ -150,14 +148,14 @@ std::unique_ptr<WalRecord> Wal::readNextRecord() {
     }
 
     // 检查是否到达文件末尾
-    if (file_.peek() == EOF) {
+    if (file_.peek() == std::ios::traits_type::eof()) {
         return nullptr;
     }
 
     try {
         // 先读取记录头部以确定记录大小
-        const size_t header_size = WalRecord::getHeaderSize();
-        std::vector<uint8_t> header(header_size);
+        const std::size_t header_size = WalRecord::getHeaderSize();
+        std::vector<std::uint8_t> header(header_size);
 
         // 读取头部
         file_.read(reinterpret_cast<char*>(header.data()), header.size());
@@ -165,16 +163,16 @@ std::unique_ptr<WalRecord> Wal::readNextRecord() {
         // 检查是否读取成功
         if (file_.fail()) {
             if (file_.eof()) {
-                LOG_ERROR("读取WAL记录头部时遇到文件结束");
+                LOG_ERROR()("读取WAL记录头部时遇到文件结束");
                 return nullptr;
             }
 
-            LOG_ERROR("读取WAL记录头部失败");
+            LOG_ERROR()("读取WAL记录头部失败");
             return nullptr;
         }
 
         // 从头部解析记录总大小
-        uint32_t total_size;
+        std::uint32_t total_size;
         std::memcpy(&total_size, header.data() + 13,
                     sizeof(total_size));  // 总大小在头部的第13个字节
 
@@ -182,19 +180,19 @@ std::unique_ptr<WalRecord> Wal::readNextRecord() {
         file_.seekg(-static_cast<int>(header_size), std::ios::cur);
 
         // 读取完整记录
-        std::vector<uint8_t> record_data(total_size);
+        std::vector<std::uint8_t> record_data(total_size);
         file_.read(reinterpret_cast<char*>(record_data.data()), record_data.size());
 
         // 检查是否读取成功
         if (file_.fail()) {
-            LOG_ERROR("读取完整WAL记录失败");
+            LOG_ERROR()("读取完整WAL记录失败");
             return nullptr;
         }
 
         // 反序列化记录
         return WalRecord::deserialize(record_data);
     } catch (const std::exception& e) {
-        LOG_ERROR("反序列化WAL记录时发生异常: {}", e.what());
+        LOG_ERROR()("反序列化WAL记录时发生异常: {}", e.what());
         return nullptr;
     }
 }
@@ -229,7 +227,7 @@ bool Wal::isEmpty() const {
     this_ptr->file_.seekg(0, std::ios::beg);
 
     // 检查是否立即到达文件末尾
-    bool is_empty = (this_ptr->file_.peek() == EOF);
+    bool is_empty = (this_ptr->file_.peek() == std::ios::traits_type::eof());
 
     // 恢复文件位置
     this_ptr->file_.seekg(current_pos);

@@ -1,11 +1,10 @@
-export module kvdb.logging.log;
+export module kvdb.logging.log.logger;
 
 import std;
+import kvdb.logging.log.log_record;
+import kvdb.logging.sinks.log_sink;
 
-#include "kvdb/logging/log_types.h"       // 依赖核心类型
-#include "kvdb/logging/sinks/log_sink.h"  // 依赖 Sink 接口
-
-export namespace kvdb {
+export namespace kvdb::logging {
 
 class Logger {
   public:
@@ -43,6 +42,4 @@ void Logger::log(LogLevel level, const std::source_location& loc,
     }
 }
 
-}  // namespace kvdb
-
-#endif  // KVDB_LOGGER_H
+}  // namespace kvdb::logging

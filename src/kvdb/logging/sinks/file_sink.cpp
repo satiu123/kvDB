@@ -1,4 +1,4 @@
-#include "kvdb/logging/sinks/file_sink.h"
+module kvdb.logging.sinks.file_sink;
 namespace kvdb {
 
 kvdb::FileSink::FileSink(std::string_view filePath) : filePath_(filePath) {
@@ -13,7 +13,7 @@ kvdb::FileSink::~FileSink() {
     }
 }
 // 文件日志记录器实现
-void kvdb::FileSink::log(const LogRecord& record) {
+void kvdb::FileSink::log(const logging::LogRecord& record) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (fileStream_) {
         fileStream_ << record.toString() << '\n';

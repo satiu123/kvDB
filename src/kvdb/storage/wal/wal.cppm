@@ -1,6 +1,7 @@
-export module kvdb.storage.wal;
+export module kvdb.storage.wal.wal;
 
 import std;
+import kvdb.storage.wal.wal_record;
 
 export namespace kvdb {
 
@@ -114,5 +115,3 @@ class Wal {
 };
 
 }  // namespace kvdb
-
-#endif  // WAL_H

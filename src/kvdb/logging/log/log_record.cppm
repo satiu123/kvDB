@@ -1,8 +1,8 @@
-export module kvdb.logging.log;
+export module kvdb.logging.log.log_record;
 
 import std;
 
-export namespace kvdb {
+export namespace kvdb::logging {
 
 // 日志级别枚举
 enum class LogLevel : std::uint8_t { DEBUG, INFO, WARNING, ERROR };
@@ -44,6 +44,4 @@ class LogRecord {
     static constexpr const char* FORMATSTR{"{} [{}] {}:{}: {}"};
 };
 
-}  // namespace kvdb
-
-#endif  // KVDB_LOG_TYPES_H
+}  // namespace kvdb::logging

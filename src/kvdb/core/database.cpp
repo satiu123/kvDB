@@ -1,15 +1,8 @@
-#include "kvdb/core/database.h"
-
-#include <cstddef>  // for size_t
-#include <mutex>
-#include <optional>
-#include <string>
-#include <unordered_map>
-
-#include "kvdb/logging/log.h"
-
-namespace kvdb {
-
+module kvdb.core.database;
+import std;
+import kvdb.logging.log.log_impl;
+using kvdb::Database, kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
+    kvdb::logging::LOG_WARNING;
 Database::Database(std::string_view wal_path, std::string_view snapshot_path)
     : wal_(wal_path),
       snapshot_(snapshot_path),
@@ -17,7 +10,7 @@ Database::Database(std::string_view wal_path, std::string_view snapshot_path)
       snapshot_manager_(wal_, snapshot_) {
     // 使用恢复管理器恢复数据
     if (!recovery_manager_.recover(data_)) {
-        LOG_ERROR("数据恢复失败");
+        LOG_ERROR()("数据恢复失败");
     }
 }
 
@@ -31,13 +24,13 @@ bool Database::put(std::string_view key, std::string_view value) {
 
     // 1. 先写WAL
     if (!wal_.appendPut(key, value)) {
-        LOG_ERROR("写入WAL失败: PUT key={}", key);
+        LOG_ERROR()("写入WAL失败: PUT key={}", key);
         return false;
     }
 
     // 2. 再修改内存数据
     data_[key.data()] = value.data();
-    LOG_DEBUG("PUT操作成功: key={}, value={}", key, value);
+    // LOG_DEBUG()("PUT操作成功: key={}, value={}", key, value);
 
     // 3. 记录操作并检查是否需要自动快照
     snapshot_manager_.recordOperation();
@@ -61,19 +54,19 @@ bool Database::remove(std::string_view key) {
     // 检查键是否存在
     auto it = data_.find(std::string(key));
     if (it == data_.end()) {
-        LOG_DEBUG("删除操作失败: 键不存在 key={}", key);
+        LOG_DEBUG()("删除操作失败: 键不存在 key={}", key);
         return false;  // 键不存在
     }
 
     // 1. 先写WAL
     if (!wal_.appendRemove(key)) {
-        LOG_ERROR("写入WAL失败: REMOVE key={}", key);
+        LOG_ERROR()("写入WAL失败: REMOVE key={}", key);
         return false;
     }
 
     // 2. 再修改内存数据
     bool result = data_.erase(std::string(key)) > 0;
-    LOG_DEBUG("REMOVE操作成功: key={}", key);
+    LOG_DEBUG()("REMOVE操作成功: key={}", key);
 
     // 3. 记录操作并检查是否需要自动快照
     snapshot_manager_.recordOperation();
@@ -82,7 +75,7 @@ bool Database::remove(std::string_view key) {
     return result;
 }
 
-size_t Database::size() const {
+std::size_t Database::size() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return data_.size();
 }
@@ -92,13 +85,13 @@ void Database::clear() {
 
     // 1. 先写WAL
     if (!wal_.appendClear()) {
-        LOG_ERROR("写入WAL失败: CLEAR");
+        LOG_ERROR()("写入WAL失败: CLEAR");
         return;
     }
 
     // 2. 再修改内存数据
     data_.clear();
-    LOG_DEBUG("CLEAR操作成功");
+    LOG_DEBUG()("CLEAR操作成功");
 
     // 3. 记录操作并检查是否需要自动快照
     snapshot_manager_.recordOperation();
@@ -133,7 +126,7 @@ void Database::setSnapshotConfig(const SnapshotConfig& config) {
 }
 
 // 获取快照配置
-const SnapshotConfig& Database::getSnapshotConfig() const {
+const kvdb::SnapshotConfig& Database::getSnapshotConfig() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return snapshot_manager_.getConfig();
 }
@@ -142,5 +135,3 @@ const SnapshotConfig& Database::getSnapshotConfig() const {
 bool Database::hasSnapshot() const {
     return snapshot_manager_.hasSnapshot();
 }
-
-}  // namespace kvdb

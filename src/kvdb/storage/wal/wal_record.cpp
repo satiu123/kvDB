@@ -1,12 +1,12 @@
-module kvdb.storage.wal;
+module kvdb.storage.wal.wal_record;
 
 import std;
-#include "kvdb/logging/log.h"
-
+import kvdb.logging.log.log_impl;
+using kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
 namespace kvdb {
 
 // CRC32校验和表
-static constexpr uint32_t crc32_table[256] = {
+static constexpr std::uint32_t crc32_table[256] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 0xe963a535, 0x9e6495a3,
     0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988, 0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91,
     0x1db71064, 0x6ab020f2, 0xf3b97148, 0x84be41de, 0x1adad47d, 0x6ddde4eb, 0xf4d4b551, 0x83d385c7,
@@ -48,26 +48,26 @@ WalRecord::WalRecord(WalOpType op_type, std::string_view key, std::string_view v
 }
 
 // 序列化记录为二进制数据
-std::vector<uint8_t> WalRecord::serialize() const {
+std::vector<std::uint8_t> WalRecord::serialize() const {
     // 计算总大小
-    size_t total_size = HEADER_SIZE + key_.size() + value_.size();
+    std::size_t total_size = HEADER_SIZE + key_.size() + value_.size();
 
     // 分配内存
-    std::vector<uint8_t> data(total_size);
+    std::vector<std::uint8_t> data(total_size);
 
     // 填充数据
-    size_t offset = 0;
+    std::size_t offset = 0;
 
     // 1. 操作类型
-    data[offset++] = static_cast<uint8_t>(op_type_);
+    data[offset++] = static_cast<std::uint8_t>(op_type_);
 
     // 2. 键长度
-    uint32_t key_size = static_cast<uint32_t>(key_.size());
+    std::uint32_t key_size = static_cast<std::uint32_t>(key_.size());
     std::memcpy(data.data() + offset, &key_size, sizeof(key_size));
     offset += sizeof(key_size);
 
     // 3. 值长度
-    uint32_t value_size = static_cast<uint32_t>(value_.size());
+    std::uint32_t value_size = static_cast<std::uint32_t>(value_.size());
     std::memcpy(data.data() + offset, &value_size, sizeof(value_size));
     offset += sizeof(value_size);
 
@@ -76,7 +76,7 @@ std::vector<uint8_t> WalRecord::serialize() const {
     offset += sizeof(checksum_);
 
     // 5. 总记录长度
-    uint32_t record_size = static_cast<uint32_t>(total_size);
+    std::uint32_t record_size = static_cast<std::uint32_t>(total_size);
     std::memcpy(data.data() + offset, &record_size, sizeof(record_size));
     offset += sizeof(record_size);
 
@@ -92,58 +92,57 @@ std::vector<uint8_t> WalRecord::serialize() const {
         offset += value_.size();
     }
 
-    assert(offset == total_size);
     return data;
 }
 
 // 从二进制数据反序列化记录
-std::unique_ptr<WalRecord> WalRecord::deserialize(const std::vector<uint8_t>& data) {
+std::unique_ptr<WalRecord> WalRecord::deserialize(const std::vector<std::uint8_t>& data) {
     if (data.empty()) {
         return nullptr;
     }
     return deserialize(data.data(), data.size());
 }
 
-std::unique_ptr<WalRecord> WalRecord::deserialize(const uint8_t* data, size_t size) {
+std::unique_ptr<WalRecord> WalRecord::deserialize(const std::uint8_t* data, std::size_t size) {
     if (size < HEADER_SIZE) {
-        LOG_ERROR("数据太短，无法反序列化WalRecord");
+        LOG_ERROR()("数据太短，无法反序列化WalRecord");
         throw std::runtime_error("数据太短，无法反序列化WalRecord");
     }
 
-    size_t offset = 0;
+    std::size_t offset = 0;
 
     // 1. 操作类型
     WalOpType op_type = static_cast<WalOpType>(data[offset++]);
 
     // 2. 键长度
-    uint32_t key_size = 0;
+    std::uint32_t key_size = 0;
     std::memcpy(&key_size, data + offset, sizeof(key_size));
     offset += sizeof(key_size);
 
     // 3. 值长度
-    uint32_t value_size = 0;
+    std::uint32_t value_size = 0;
     std::memcpy(&value_size, data + offset, sizeof(value_size));
     offset += sizeof(value_size);
 
     // 4. 校验和
-    uint32_t stored_checksum = 0;
+    std::uint32_t stored_checksum = 0;
     std::memcpy(&stored_checksum, data + offset, sizeof(stored_checksum));
     offset += sizeof(stored_checksum);
 
     // 5. 总记录长度
-    uint32_t record_size = 0;
+    std::uint32_t record_size = 0;
     std::memcpy(&record_size, data + offset, sizeof(record_size));
     offset += sizeof(record_size);
 
     // 验证记录大小
     if (record_size != size) {
-        LOG_ERROR("记录大小不匹配，期望: {}, 实际: {}", record_size, size);
+        LOG_ERROR()("记录大小不匹配，期望: {}, 实际: {}", record_size, size);
         throw std::runtime_error("记录大小不匹配");
     }
 
     // 验证是否有足够的数据
     if (size < HEADER_SIZE + key_size + value_size) {
-        LOG_ERROR("数据不完整，无法反序列化WalRecord");
+        LOG_ERROR()("数据不完整，无法反序列化WalRecord");
         throw std::runtime_error("数据不完整，无法反序列化WalRecord");
     }
 
@@ -166,7 +165,7 @@ std::unique_ptr<WalRecord> WalRecord::deserialize(const uint8_t* data, size_t si
 
     // 验证校验和
     if (record->calculateChecksum() != stored_checksum) {
-        LOG_ERROR("校验和不匹配，记录可能已损坏");
+        LOG_ERROR()("校验和不匹配，记录可能已损坏");
         throw std::runtime_error("校验和不匹配，记录可能已损坏");
     }
 
@@ -174,7 +173,7 @@ std::unique_ptr<WalRecord> WalRecord::deserialize(const uint8_t* data, size_t si
 }
 
 // 获取记录序列化后大小
-size_t WalRecord::size() const {
+std::size_t WalRecord::size() const {
     return HEADER_SIZE + key_.size() + value_.size();
 }
 
@@ -185,21 +184,21 @@ std::string WalRecord::toString() const {
 }
 
 // 计算记录的CRC32校验和
-uint32_t WalRecord::calculateChecksum() const {
-    uint32_t crc = 0xFFFFFFFF;
+std::uint32_t WalRecord::calculateChecksum() const {
+    std::uint32_t crc = 0xFFFFFFFF;
 
     // 包含操作类型
-    uint8_t op = static_cast<uint8_t>(op_type_);
+    std::uint8_t op = static_cast<std::uint8_t>(op_type_);
     crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ op];
 
     // 包含键
     for (char c : key_) {
-        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ static_cast<uint8_t>(c)];
+        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ static_cast<std::uint8_t>(c)];
     }
 
     // 包含值
     for (char c : value_) {
-        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ static_cast<uint8_t>(c)];
+        crc = (crc >> 8) ^ crc32_table[(crc & 0xFF) ^ static_cast<std::uint8_t>(c)];
     }
 
     return ~crc;  // 完成CRC32计算
