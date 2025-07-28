@@ -1,4 +1,4 @@
-export module kvdb.core.database;
+export module kvdb.core:database;
 
 import std;
 import kvdb.storage;
@@ -87,7 +87,7 @@ class Database {
      * @brief 设置快照配置
      * @param config 快照配置
      */
-    void setSnapshotConfig(const storage::SnapshotConfig& config);
+    void setSnapshotConfig(const storage::SnapshotConfig&& config);
 
     /**
      * @brief 获取当前快照配置

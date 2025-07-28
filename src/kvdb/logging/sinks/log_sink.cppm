@@ -2,7 +2,7 @@ export module kvdb.logging.sinks.log_sink;
 
 import kvdb.logging.log.log_record;
 
-export namespace kvdb {
+export namespace kvdb::logging {
 
 // 日志记录器接口
 class LogSink {
@@ -15,4 +15,4 @@ class LogSink {
     LogSink() = default;
 };
 
-}  // namespace kvdb
+}  // namespace kvdb::logging

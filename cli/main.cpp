@@ -21,6 +21,12 @@ int main() {
     kvdb::core::Database db("kvdb.wal");
     kvdb::logging::Logger::getInstance().addSink(
         std::make_shared<kvdb::logging::FileSink>("kvdb.log"));
+    // 配置自动快照
+    db.setSnapshotConfig({.auto_snapshot_enabled = true,
+                          .wal_size_threshold = 5,
+                          .time_interval = std::chrono::minutes(1)}
+                         // 启用自动快照，每5个操作或1分钟创建一次快照
+    );
     std::cout << "Welcome to kvDB CLI!" << std::endl;
     std::cout << "Type 'help' for available commands." << std::endl;
     std::cout << std::endl;

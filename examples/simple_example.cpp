@@ -6,6 +6,7 @@ import kvdb;
 using kvdb::logging::LOG_INFO, kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR;
 int main() {
     kvdb::core::Database db("kvdb.wal");
+    kvdb::logging::LOG_INFO()("Database initialized successfully");
     kvdb::logging::Logger::getInstance().addSink(std::make_shared<kvdb::logging::ConsoleSink>());
     // 存储一些键值对
     db.put("name", "kvDB");

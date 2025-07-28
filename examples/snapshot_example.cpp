@@ -7,11 +7,11 @@ int main() {
     kvdb::core::Database db("example.wal", "example.snapshot");
     std::cout << "=== KvDB 快照示例 ===" << std::endl;
     // 配置自动快照
-    kvdb::storage::SnapshotConfig config;
-    config.auto_snapshot_enabled = true;
-    config.operation_count_threshold = 5;            // 5个操作后自动创建快照
-    config.time_interval = std::chrono::minutes(1);  // 1分钟间隔
-    db.setSnapshotConfig(config);
+    db.setSnapshotConfig({.auto_snapshot_enabled = true,
+                          .wal_size_threshold = 5,
+                          .time_interval = std::chrono::minutes(1)}
+                         // 启用自动快照，每5个操作或1分钟创建一次快照
+    );
 
     std::cout << "快照配置已设置：每5个操作或1分钟自动创建快照" << std::endl;
 

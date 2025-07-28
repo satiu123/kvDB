@@ -1,6 +1,7 @@
-module kvdb.core.database;
+module kvdb.core;
 import std;
 import kvdb.logging.log;
+import kvdb.storage.manager.snapshot_manager;
 
 using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
     kvdb::logging::LOG_WARNING;
@@ -46,6 +47,7 @@ std::optional<std::string> Database::get(std::string_view key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = data_.find(key.data());
     if (it != data_.end()) {
+        LOG_DEBUG()("GET操作成功: key={}, value={}", key, it->second);
         return it->second;
     }
     return std::nullopt;
@@ -123,7 +125,7 @@ bool Database::createSnapshot() {
 }
 
 // 设置快照配置
-void Database::setSnapshotConfig(const storage::SnapshotConfig& config) {
+void Database::setSnapshotConfig(const storage::SnapshotConfig&& config) {
     std::lock_guard<std::mutex> lock(mutex_);
     snapshot_manager_.setConfig(config);
 }

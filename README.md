@@ -43,7 +43,6 @@
 
 您需要一个支持 C++23 和 C++20 模块的现代 C++ 编译器（例如，Clang 17+ 或 GCC 13+）。
 
-**当前项目中src/stdm/中的std.pcm和std.compat.pcm基于clang 20.1.8和libc++编译得到**
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/satiu/kvDB.git
