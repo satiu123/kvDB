@@ -27,13 +27,12 @@ set_target_properties(kvdb PROPERTIES
     CXX_SCAN_FOR_MODULES ON
 )
 
-# 6. 指定头文件搜索路径
-target_include_directories(kvdb PUBLIC
-    $<INSTALL_INTERFACE:include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+
+target_link_libraries(kvdb
+    PRIVATE
+        std-cxx-modules
 )
 
-# 5. 安装库 (这部分不变)
 install(TARGETS kvdb
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
