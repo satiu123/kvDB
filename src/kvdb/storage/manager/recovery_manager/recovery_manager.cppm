@@ -24,7 +24,7 @@ class RecoveryManager {
      * @param data 用于存储恢复数据的容器
      * @return 是否成功
      */
-    bool recover(std::unordered_map<std::string, std::string>& data);
+    bool recover(std::map<std::string, std::string>& data);
 
   private:
     Wal& wal_;
@@ -35,14 +35,14 @@ class RecoveryManager {
      * @param data 数据容器
      * @return 是否成功
      */
-    bool recoverFromWal(std::unordered_map<std::string, std::string>& data);
+    bool recoverFromWal(std::map<std::string, std::string>& data);
 
     /**
      * @brief 从快照恢复数据
      * @param data 数据容器
      * @return 是否成功
      */
-    bool recoverFromSnapshot(std::unordered_map<std::string, std::string>& data);
+    bool recoverFromSnapshot(std::map<std::string, std::string>& data);
 
     /**
      * @brief 重放WAL记录到数据容器
@@ -50,7 +50,7 @@ class RecoveryManager {
      * @param handler WAL记录处理函数
      * @return 是否成功
      */
-    bool replayWalRecords(std::unordered_map<std::string, std::string>& data);
+    bool replayWalRecords(std::map<std::string, std::string>& data);
 };
 
 }  // namespace kvdb::storage

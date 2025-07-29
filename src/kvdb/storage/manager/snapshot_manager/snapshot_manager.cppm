@@ -34,7 +34,7 @@ class SnapshotManager {
      * @param data 要保存的数据
      * @return 是否成功
      */
-    bool createSnapshot(const std::unordered_map<std::string, std::string>& data);
+    bool createSnapshot(const std::map<std::string, std::string>& data);
 
     /**
      * @brief 设置快照配置
@@ -64,7 +64,7 @@ class SnapshotManager {
      * @param data 当前数据（用于创建快照）
      * @return 是否创建了快照
      */
-    bool checkAutoSnapshot(const std::unordered_map<std::string, std::string>& data);
+    bool checkAutoSnapshot(const std::map<std::string, std::string>& data);
 
   private:
     Wal& wal_;

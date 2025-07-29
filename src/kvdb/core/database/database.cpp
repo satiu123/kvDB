@@ -40,6 +40,11 @@ bool Database::put(std::string_view key, std::string_view value) {
     snapshot_manager_.recordOperation();
     snapshot_manager_.checkAutoSnapshot(data_);
 
+    if (data_.size() >= memtable_flush_threshold_) {
+        LOG_INFO()("MemTable is full. Flushing to disk (simulation).");
+        data_.clear();
+    }
+
     return true;
 }
 
@@ -140,4 +145,10 @@ const storage::SnapshotConfig& Database::getSnapshotConfig() const {
 bool Database::hasSnapshot() const {
     return snapshot_manager_.hasSnapshot();
 }
+
+void Database::setMemtableFlushThreshold(std::size_t threshold) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    memtable_flush_threshold_ = threshold;
+}
+
 }  // namespace kvdb::core

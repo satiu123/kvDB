@@ -6,7 +6,7 @@ namespace kvdb::storage {
 SnapshotManager::SnapshotManager(Wal& wal, Snapshot& snapshot)
     : wal_(wal), snapshot_(snapshot), last_snapshot_time_(std::chrono::steady_clock::now()) {}
 
-bool SnapshotManager::createSnapshot(const std::unordered_map<std::string, std::string>& data) {
+bool SnapshotManager::createSnapshot(const std::map<std::string, std::string>& data) {
     LOG_INFO()("开始创建数据快照...");
 
     // TODO: 获取当前WAL文件大小或偏移量
@@ -46,7 +46,7 @@ void SnapshotManager::recordOperation() {
     ++operations_since_snapshot_;
 }
 
-bool SnapshotManager::checkAutoSnapshot(const std::unordered_map<std::string, std::string>& data) {
+bool SnapshotManager::checkAutoSnapshot(const std::map<std::string, std::string>& data) {
     if (!config_.auto_snapshot_enabled) {
         return false;
     }

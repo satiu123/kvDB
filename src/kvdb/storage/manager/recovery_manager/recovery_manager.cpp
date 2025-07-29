@@ -6,7 +6,7 @@ using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBU
 namespace kvdb::storage {
 RecoveryManager::RecoveryManager(Wal& wal, Snapshot& snapshot) : wal_(wal), snapshot_(snapshot) {}
 
-bool RecoveryManager::recover(std::unordered_map<std::string, std::string>& data) {
+bool RecoveryManager::recover(std::map<std::string, std::string>& data) {
     // 优先从快照恢复，如果失败则从WAL恢复
     if (snapshot_.exists()) {
         return recoverFromSnapshot(data);
@@ -15,7 +15,7 @@ bool RecoveryManager::recover(std::unordered_map<std::string, std::string>& data
     }
 }
 
-bool RecoveryManager::recoverFromSnapshot(std::unordered_map<std::string, std::string>& data) {
+bool RecoveryManager::recoverFromSnapshot(std::map<std::string, std::string>& data) {
     LOG_INFO()("正在从快照恢复数据...");
 
     std::uint64_t wal_offset = 0;
@@ -40,7 +40,7 @@ bool RecoveryManager::recoverFromSnapshot(std::unordered_map<std::string, std::s
     return true;
 }
 
-bool RecoveryManager::recoverFromWal(std::unordered_map<std::string, std::string>& data) {
+bool RecoveryManager::recoverFromWal(std::map<std::string, std::string>& data) {
     LOG_INFO()("正在从WAL文件恢复数据...");
 
     // 如果WAL文件为空，则无需恢复
@@ -58,7 +58,7 @@ bool RecoveryManager::recoverFromWal(std::unordered_map<std::string, std::string
     return true;
 }
 
-bool RecoveryManager::replayWalRecords(std::unordered_map<std::string, std::string>& data) {
+bool RecoveryManager::replayWalRecords(std::map<std::string, std::string>& data) {
     // 重放WAL中的所有记录
     bool success = wal_.replay([&data](const WalRecord& record) {
         switch (record.getOpType()) {

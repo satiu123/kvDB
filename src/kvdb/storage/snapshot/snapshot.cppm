@@ -55,8 +55,7 @@ class Snapshot {
      * @param wal_offset 当前WAL偏移量
      * @return 是否成功
      */
-    bool create(const std::unordered_map<std::string, std::string>& data,
-                std::uint64_t wal_offset = 0);
+    bool create(const std::map<std::string, std::string>& data, std::uint64_t wal_offset = 0);
 
     /**
      * @brief 从快照文件恢复数据
@@ -64,7 +63,7 @@ class Snapshot {
      * @param wal_offset 返回快照对应的WAL偏移量
      * @return 是否成功
      */
-    bool restore(std::unordered_map<std::string, std::string>& data, std::uint64_t& wal_offset);
+    bool restore(std::map<std::string, std::string>& data, std::uint64_t& wal_offset);
 
     /**
      * @brief 检查快照文件是否存在

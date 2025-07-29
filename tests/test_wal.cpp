@@ -1,14 +1,10 @@
 #include <gtest/gtest.h>
 
-#include <filesystem>
-#include <memory>
-#include <string>
-#include <vector>
+import std;
+import kvdb;
 
-#include "kvdb/logging/log.h"
-#include "kvdb/storage/wal/wal.h"
-#include "kvdb/storage/wal/wal_record.h"
-
+using namespace kvdb::logging;
+using namespace kvdb::storage;
 namespace kvdb {
 namespace {
 

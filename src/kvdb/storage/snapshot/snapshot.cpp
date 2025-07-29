@@ -7,8 +7,7 @@ using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR;
 namespace kvdb::storage {
 Snapshot::Snapshot(std::string_view snapshot_path) : snapshot_path_(snapshot_path) {}
 
-bool Snapshot::create(const std::unordered_map<std::string, std::string>& data,
-                      std::uint64_t wal_offset) {
+bool Snapshot::create(const std::map<std::string, std::string>& data, std::uint64_t wal_offset) {
     LOG_INFO()("开始创建快照文件: {}", snapshot_path_);
 
     std::ofstream file(snapshot_path_, std::ios::binary);
@@ -54,8 +53,7 @@ bool Snapshot::create(const std::unordered_map<std::string, std::string>& data,
     return true;
 }
 
-bool Snapshot::restore(std::unordered_map<std::string, std::string>& data,
-                       std::uint64_t& wal_offset) {
+bool Snapshot::restore(std::map<std::string, std::string>& data, std::uint64_t& wal_offset) {
     LOG_INFO()("开始从快照恢复数据: {}", snapshot_path_);
 
     std::ifstream file(snapshot_path_, std::ios::binary);
@@ -80,7 +78,6 @@ bool Snapshot::restore(std::unordered_map<std::string, std::string>& data,
 
     // 清空数据容器
     data.clear();
-    data.reserve(header.record_count);
 
     // 读取数据记录
     for (std::uint64_t i = 0; i < header.record_count; ++i) {

@@ -90,6 +90,12 @@ class Database {
     void setSnapshotConfig(const storage::SnapshotConfig&& config);
 
     /**
+     * @brief 设置MemTable刷写阈值
+     * @param threshold 阈值
+     */
+    void setMemtableFlushThreshold(std::size_t threshold);
+
+    /**
      * @brief 获取当前快照配置
      * @return 快照配置
      */
@@ -108,13 +114,15 @@ class Database {
     std::vector<std::string> keys() const;
 
   private:
-    std::unordered_map<std::string, std::string> data_;
+    std::map<std::string, std::string> data_;
     mutable std::mutex mutex_;
 
     storage::Wal wal_;                           // WAL实例，用于持久化操作
     storage::Snapshot snapshot_;                 // 快照实例，用于快照功能
     storage::RecoveryManager recovery_manager_;  // 恢复管理器
     storage::SnapshotManager snapshot_manager_;  // 快照管理器
+
+    std::size_t memtable_flush_threshold_ = 4;  // MemTable刷写阈值
 
     enum class OpType : std::uint8_t { PUT, REMOVE, CLEAR };
 };
