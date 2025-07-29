@@ -1,38 +1,62 @@
 #include <gtest/gtest.h>
 
-import kvdb;
-using namespace kvdb::core;
-TEST(DatabaseTest, DISABLED_BasicOperations) {
-    // kvdb::Database db("kvdb.wal");
-    Database db;
+#include <filesystem>
+#include <memory>
+import kvdb.core;
 
-    // 测试 put 和 get
-    EXPECT_TRUE(db.put("key1", "value1"));
-    auto value = db.get("key1");
+class DatabaseTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        cleanup();
+        db = std::make_unique<kvdb::core::Database>(base_path);
+    }
+
+    void TearDown() override {
+        db.reset();
+        cleanup();
+    }
+
+    void cleanup() {
+        std::filesystem::remove_all(base_path);
+    }
+
+    std::string base_path = "test_db_dir";
+    std::unique_ptr<kvdb::core::Database> db;
+};
+
+TEST_F(DatabaseTest, BasicOperations) {
+    EXPECT_TRUE(db->put("key1", "value1"));
+    auto value = db->get("key1");
     ASSERT_TRUE(value.has_value());
     EXPECT_EQ(*value, "value1");
 
-    // 测试不存在的键
-    EXPECT_FALSE(db.get("nonexistent").has_value());
+    EXPECT_FALSE(db->get("nonexistent").has_value());
 
-    // 测试 exists
-    EXPECT_TRUE(db.exists("key1"));
-    EXPECT_FALSE(db.exists("nonexistent"));
+    EXPECT_TRUE(db->exists("key1"));
+    EXPECT_FALSE(db->exists("nonexistent"));
 
-    // 测试 remove
-    EXPECT_TRUE(db.remove("key1"));
-    EXPECT_FALSE(db.exists("key1"));
+    EXPECT_TRUE(db->remove("key1"));
+    EXPECT_FALSE(db->exists("key1"));
 
-    // 测试 size 和 clear
-    EXPECT_EQ(db.size(), 0);
-    db.put("key1", "value1");
-    db.put("key2", "value2");
-    EXPECT_EQ(db.size(), 2);
-    db.clear();
-    EXPECT_EQ(db.size(), 0);
+    EXPECT_EQ(db->size(), 0);
+    db->put("key1", "value1");
+    db->put("key2", "value2");
+    EXPECT_EQ(db->size(), 2);
+    db->clear();
+    EXPECT_EQ(db->size(), 0);
 }
 
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+TEST_F(DatabaseTest, Persistence) {
+    db->put("key1", "value1");
+    db->put("key2", "value2");
+    db->remove("key1");
+
+    // Re-open the database
+    db.reset();
+    db = std::make_unique<kvdb::core::Database>(base_path);
+
+    EXPECT_FALSE(db->exists("key1"));
+    EXPECT_TRUE(db->exists("key2"));
+    EXPECT_EQ(*db->get("key2"), "value2");
+    EXPECT_EQ(db->size(), 1);
 }

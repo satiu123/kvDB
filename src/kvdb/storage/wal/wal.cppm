@@ -24,13 +24,6 @@ class Wal {
      * @brief 析构函数
      */
     ~Wal();
-
-    // 禁用拷贝和移动
-    Wal(const Wal&) = delete;
-    Wal& operator=(const Wal&) = delete;
-    Wal(Wal&&) = delete;
-    Wal& operator=(Wal&&) = delete;
-
     /**
      * @brief 添加一条PUT操作记录到WAL
      * @param key 键

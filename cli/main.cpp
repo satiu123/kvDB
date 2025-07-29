@@ -1,147 +1,121 @@
 import std;
-import std.compat;
-
 import kvdb;
 
+// 函数声明
+void print_usage();
+void process_command(kvdb::core::Database& db, const std::string& line);
+std::vector<std::string> split_input(const std::string& input);
 
+
+// 打印使用帮助
 void print_usage() {
-    std::cout << "Commands:" << std::endl;
-    std::cout << "  get <key>        Get the value of a key" << std::endl;
-    std::cout << "  set <key> <value>  Set the value of a key" << std::endl;
-    std::cout << "  rm <key>         Remove a key" << std::endl;
-    std::cout << "  ls               List all keys (not implemented)" << std::endl;
-    std::cout << "  size             Show number of entries in database" << std::endl;
-    std::cout << "  clear            Clear all data from database" << std::endl;
-    std::cout << "  help             Show this help message" << std::endl;
-    std::cout << "  exit/quit        Exit the CLI" << std::endl;
-    std::cout << std::endl;
+    std::cout << "Commands:\n"
+              << "  put <key> <value>    - Insert or update a key-value pair.\n"
+              << "  get <key>            - Retrieve the value for a key.\n"
+              << "  remove <key>         - Delete a key.\n"
+              << "  exists <key>         - Check if a key exists.\n"
+              << "  size                 - Get the number of keys.\n"
+              << "  keys                 - List all keys.\n"
+              << "  clear                - Clear the database.\n"
+              << "  compact              - Compact the database.\n"
+              << "  wal                  - Print the WAL records.\n"
+              << "  exit/quit            - Exit the CLI.\n"
+              << "  help                 - Show this help message.\n";
 }
 
-int main() {
-    kvdb::core::Database db("kvdb.wal");
+// 主函数
+int main(int argc, char* argv[]) {
+    std::string db_path = ".";  // 默认数据库路径
+    if (argc > 1) {
+        db_path = argv[1];
+    }
+    kvdb::core::Database db(db_path);
     kvdb::logging::Logger::getInstance().addSink(
-        std::make_shared<kvdb::logging::FileSink>("kvdb.log"));
-    // 配置自动快照
-    db.setSnapshotConfig({.auto_snapshot_enabled = true,
-                          .wal_size_threshold = 5,
-                          .time_interval = std::chrono::minutes(1)}
-                         // 启用自动快照，每5个操作或1分钟创建一次快照
-    );
-    std::cout << "Welcome to kvDB CLI!" << std::endl;
-    std::cout << "Type 'help' for available commands." << std::endl;
-    std::cout << std::endl;
-    std::string input;
-    while (true) {
-        std::cout << "kvdb> ";
-        std::cout.flush();
-
-        if (!std::getline(std::cin, input)) {
-            // EOF reached (Ctrl+D)
-            std::cout << std::endl;
-            break;
-        }
-
-        // Trim whitespace
-        size_t start = input.find_first_not_of(" \t");
-        if (start == std::string::npos) {
-            continue;  // Empty line
-        }
-        size_t end = input.find_last_not_of(" \t");
-        input = input.substr(start, end - start + 1);
-
-        if (input == "exit" || input == "quit") {
-            break;
-        }
-
-        std::vector<std::string> args;
-        std::string current_arg;
-        for (char c : input) {
-            if (c == ' ') {
-                if (!current_arg.empty()) {
-                    args.push_back(current_arg);
-                    current_arg.clear();
-                }
-            } else {
-                current_arg += c;
-            }
-        }
-        if (!current_arg.empty()) {
-            args.push_back(current_arg);
-        }
-
-        if (args.empty()) {
+        std::make_shared<kvdb::logging::FileSink>(db_path + "/kvdb.log"));
+    std::cout << "Welcome to kvDB CLI!\n";
+    std::string line;
+    std::cout << "kvdb> ";
+    while (std::getline(std::cin, line)) {
+        if (line.empty()) {
+            std::cout << "kvdb> ";
             continue;
         }
-
-        const std::string& command = args[0];
-
-        if (command == "get") {
-            if (args.size() != 2) {
-                print_usage();
-                continue;
-            }
-            const std::string& key = args[1];
-            auto value = db.get(key);
-            if (value) {
-                std::cout << *value << std::endl;
-            } else {
-                std::cerr << "Key not found" << std::endl;
-            }
-        } else if (command == "set") {
-            if (args.size() != 3) {
-                print_usage();
-                continue;
-            }
-            const std::string& key = args[1];
-            const std::string& value = args[2];
-            if (db.put(key, value)) {
-                std::cout << "OK" << std::endl;
-            } else {
-                std::cerr << "Failed to set value" << std::endl;
-            }
-        } else if (command == "rm") {
-            if (args.size() != 2) {
-                print_usage();
-                continue;
-            }
-            const std::string& key = args[1];
-            if (db.remove(key)) {
-                std::cout << "OK" << std::endl;
-            } else {
-                std::cerr << "Key not found" << std::endl;
-            }
-        } else if (command == "ls") {
-            if (args.size() == 2 and args[1] == "wal") {
-                db.printWALRecords();
-                continue;
-            }
-            if (args.size() > 2) {
-                print_usage();
-                continue;
-            }
-            auto keys = db.keys();
-            for (const auto& key : keys) {
-                std::cout << key << std::endl;
-            }
-        } else if (command == "help") {
-            print_usage();
-        } else if (command == "size") {
-            std::cout << "Database contains " << db.size() << " entries" << std::endl;
-        } else if (command == "clear") {
-            std::cout << "Are you sure you want to clear all data? (y/N): ";
-            std::string confirm;
-            std::getline(std::cin, confirm);
-            if (confirm == "y" || confirm == "Y" || confirm == "yes") {
-                db.clear();
-                std::cout << "Database cleared." << std::endl;
-            } else {
-                std::cout << "Operation cancelled." << std::endl;
-            }
-        } else {
-            std::cout << "Unknown command: " << command << std::endl;
-            print_usage();
+        if (line == "quit" || line == "exit") {
+            break;
         }
+        process_command(db, line);
+        std::cout << "kvdb> ";
     }
-    std::cout << "Goodbye!" << std::endl;
+
+    std::cout << "\nGoodbye!" << std::endl;
     return 0;
+}
+
+// 处理命令
+void process_command(kvdb::core::Database& db, const std::string& line) {
+    auto args = split_input(line);
+    if (args.empty()) {
+        return;
+    }
+
+    std::string command = args[0];
+
+    if (command == "put" && args.size() == 3) {
+        if (db.put(args[1], args[2])) {
+            std::cout << "OK\n";
+        } else {
+            std::cerr << "Error: Failed to put key.\n";
+        }
+    } else if (command == "get" && args.size() == 2) {
+        auto value = db.get(args[1]);
+        if (value) {
+            std::cout << *value << '\n';
+        } else {
+            std::cout << "(nil)\n";
+        }
+    } else if (command == "remove" && args.size() == 2) {
+        if (db.remove(args[1])) {
+            std::cout << "OK\n";
+        } else {
+            std::cerr << "Error: Key not found or failed to remove.\n";
+        }
+    } else if (command == "exists" && args.size() == 2) {
+        if (db.exists(args[1])) {
+            std::cout << "true\n";
+        } else {
+            std::cout << "false\n";
+        }
+    } else if (command == "size" && args.size() == 1) {
+        std::cout << db.size() << '\n';
+    } else if (command == "keys" && args.size() == 1) {
+        for (const auto& key : db.keys()) {
+            std::cout << key << '\n';
+        }
+    } else if (command == "clear" && args.size() == 1) {
+        db.clear();
+        std::cout << "OK\n";
+    } else if (command == "compact" && args.size() == 1) {
+        db.compact();
+        std::cout << "OK\n";
+    } else if (command == "wal" && args.size() == 1) {
+        db.printWALRecords();
+    } else if (command == "help") {
+        print_usage();
+    } else if (command == "quit" || command == "exit") {
+        // This case is handled in the main loop, but we keep it here for clarity
+    } else {
+        std::cout << "Unknown command: " << command << std::endl;
+        print_usage();
+    }
+}
+
+// 分割输入字符串
+std::vector<std::string> split_input(const std::string& input) {
+    std::istringstream iss(input);
+    std::vector<std::string> tokens;
+    std::string token;
+    while (iss >> token) {
+        tokens.push_back(token);
+    }
+    return tokens;
 }

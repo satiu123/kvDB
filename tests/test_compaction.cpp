@@ -7,7 +7,7 @@ class CompactionTest : public ::testing::Test {
   protected:
     void SetUp() override {
         cleanup();
-        db = std::make_unique<kvdb::core::Database>(wal_path, snapshot_path);
+        db = std::make_unique<kvdb::core::Database>(base_path);
     }
 
     void TearDown() override {
@@ -16,17 +16,10 @@ class CompactionTest : public ::testing::Test {
     }
 
     void cleanup() {
-        std::filesystem::remove(wal_path);
-        std::filesystem::remove(snapshot_path);
-        for (const auto& entry : std::filesystem::directory_iterator(".")) {
-            if (entry.path().extension() == ".db") {
-                std::filesystem::remove(entry.path());
-            }
-        }
+        std::filesystem::remove_all(base_path);
     }
 
-    std::string wal_path = "test_compaction.wal";
-    std::string snapshot_path = "test_compaction.snapshot";
+    std::string base_path = "test_db_dir";
     std::unique_ptr<kvdb::core::Database> db;
 };
 
@@ -42,17 +35,19 @@ TEST_F(CompactionTest, ManualCompaction) {
     db->put("key2", "value2_new");
     db->put("key3", "value3");
 
+    auto sstables_dir = std::filesystem::path(base_path) / "data" / "sstables";
+
     // Check that we have two SSTables
-    ASSERT_TRUE(std::filesystem::exists("sstable_0.db"));
-    ASSERT_TRUE(std::filesystem::exists("sstable_1.db"));
+    ASSERT_TRUE(std::filesystem::exists(sstables_dir / "sstable_0.db"));
+    ASSERT_TRUE(std::filesystem::exists(sstables_dir / "sstable_1.db"));
 
     // Manually trigger compaction
     db->compact();
 
     // Check that old SSTables are gone and a new one is created
-    ASSERT_FALSE(std::filesystem::exists("sstable_0.db"));
-    ASSERT_FALSE(std::filesystem::exists("sstable_1.db"));
-    ASSERT_TRUE(std::filesystem::exists("sstable_compacted_2.db"));
+    ASSERT_FALSE(std::filesystem::exists(sstables_dir / "sstable_0.db"));
+    ASSERT_FALSE(std::filesystem::exists(sstables_dir / "sstable_1.db"));
+    ASSERT_TRUE(std::filesystem::exists(sstables_dir / "sstable_compacted_2.db"));
 
     // Verify data after compaction
     ASSERT_EQ(*db->get("key1"), "value1");

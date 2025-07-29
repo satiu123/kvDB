@@ -160,6 +160,7 @@ std::optional<std::string> SSTable::find(std::string_view key) {
 
 std::map<std::string, std::string> SSTable::readAll() {
     std::map<std::string, std::string> data;
+    file_.clear();  // Reset stream state (e.g., EOF from previous reads)
     file_.seekg(0);
     std::string key, value;
     while (static_cast<std::uint64_t>(file_.tellg()) < footer_.index_block_offset &&

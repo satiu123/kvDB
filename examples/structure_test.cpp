@@ -1,30 +1,23 @@
 import std;
-
-import kvdb;
-
+import kvdb.core;
 
 int main() {
-    std::cout << "=== 测试新的文件结构 ===" << std::endl;
+    // Create a database instance in the "structure_test_db" directory
+    kvdb::core::Database db("structure_test_db");
 
-    // 创建数据库实例
-    kvdb::core::Database db("structure_test.wal", "structure_test.snapshot");
+    // Set a low threshold to observe flushing
+    db.setMemtableFlushThreshold(3);
 
-    // 基本操作
-    db.put("module", "core");
-    db.put("storage", "snapshot+wal");
-    db.put("logging", "flexible");
+    // Add some data
+    db.put("key1", "value1");
+    db.put("key2", "value2");
+    db.put("key3", "value3");  // This should trigger a flush
 
-    std::cout << "当前数据库大小: " << db.size() << std::endl;
+    std::cout << "Database structure after first flush." << std::endl;
 
-    // 读取数据
-    auto modules = {"module", "storage", "logging"};
-    for (const auto& key : modules) {
-        auto value = db.get(key);
-        if (value) {
-            std::cout << key << " = " << *value << std::endl;
-        }
-    }
+    db.put("key4", "value4");
 
-    std::cout << "新文件结构测试完成！" << std::endl;
+    std::cout << "Database structure after adding more data." << std::endl;
+
     return 0;
 }

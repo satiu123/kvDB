@@ -8,7 +8,7 @@ class MemtableTest : public ::testing::Test {
   protected:
     void SetUp() override {
         cleanup();
-        db = std::make_unique<kvdb::core::Database>(wal_path, snapshot_path);
+        db = std::make_unique<kvdb::core::Database>(base_path);
     }
 
     void TearDown() override {
@@ -17,13 +17,10 @@ class MemtableTest : public ::testing::Test {
     }
 
     void cleanup() {
-        std::filesystem::remove(wal_path);
-        std::filesystem::remove(snapshot_path);
-        std::filesystem::remove("sstable_0.db");
+        std::filesystem::remove_all(base_path);
     }
 
-    std::string wal_path = "test_memtable.wal";
-    std::string snapshot_path = "test_memtable.snapshot";
+    std::string base_path = "test_db_dir";
     std::unique_ptr<kvdb::core::Database> db;
 };
 
@@ -41,8 +38,10 @@ TEST_F(MemtableTest, FlushOnThreshold) {
     // The total size of the database should still be 3.
     ASSERT_EQ(db->size(), 3);
 
+    auto sstables_dir = std::filesystem::path(base_path) / "data" / "sstables";
+
     // Verify that the SSTable file was created
-    ASSERT_TRUE(std::filesystem::exists("sstable_0.db"));
+    ASSERT_TRUE(std::filesystem::exists(sstables_dir / "sstable_0.db"));
 
     // Check that we can still get the old keys from the new SSTable
     ASSERT_EQ(*db->get("key1"), "value1");

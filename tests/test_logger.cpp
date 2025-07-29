@@ -6,8 +6,24 @@ import kvdb;
 using namespace kvdb::storage;
 using namespace kvdb::core;
 using namespace kvdb::logging;
+class LoggerTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        cleanup();
+    }
+
+    void TearDown() override {
+        cleanup();
+    }
+
+    void cleanup() {
+        std::filesystem::remove(log_path);
+    }
+
+    std::string log_path = "test_log.log";
+};
 // 测试日志系统的使用
-TEST(LoggerTest, BasicLogFunctionality) {
+TEST_F(LoggerTest, BasicLogFunctionality) {
     // 常量定义
     constexpr int DEBUG_VALUE = 42;
     constexpr int WARNING_THRESHOLD = 85;
@@ -24,7 +40,7 @@ TEST(LoggerTest, BasicLogFunctionality) {
 
     // 添加文件接收器
     try {
-        logger.addSink(std::make_shared<FileSink>("test_log.log"));
+        logger.addSink(std::make_shared<FileSink>(log_path));
         std::cout << "成功添加文件日志接收器\n";
     } catch (const std::exception& e) {
         std::cerr << "添加文件日志接收器失败: " << e.what() << "\n";
