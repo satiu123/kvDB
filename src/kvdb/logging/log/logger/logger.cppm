@@ -14,6 +14,7 @@ class Logger {
     void removeAllSinks();
     void setLevel(LogLevel level);
     [[nodiscard]] bool shouldLog(LogLevel level) const;
+    [[nodiscard]] bool isEnabled() const;
 
     template <typename... Args>
     void log(LogLevel level, const std::source_location& loc,

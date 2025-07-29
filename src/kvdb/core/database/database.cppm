@@ -113,8 +113,11 @@ class Database {
      */
     std::vector<std::string> keys() const;
 
+    void compact();
+
   private:
-    std::map<std::string, std::string> data_;
+    std::map<std::string, std::string> data_;                                 // 可变 MemTable
+    std::unique_ptr<std::map<std::string, std::string>> immutable_memtable_;  // 不可变 MemTable
     mutable std::mutex mutex_;
 
     storage::Wal wal_;                           // WAL实例，用于持久化操作
@@ -122,7 +125,9 @@ class Database {
     storage::RecoveryManager recovery_manager_;  // 恢复管理器
     storage::SnapshotManager snapshot_manager_;  // 快照管理器
 
-    std::size_t memtable_flush_threshold_ = 4;  // MemTable刷写阈值
+    std::size_t memtable_flush_threshold_ = 4;                 // MemTable刷写阈值
+    std::atomic<std::size_t> sstable_counter_ = 0;             // SSTable文件计数器
+    std::vector<std::unique_ptr<storage::SSTable>> sstables_;  // SSTable读取器
 
     enum class OpType : std::uint8_t { PUT, REMOVE, CLEAR };
 };

@@ -11,6 +11,9 @@ class LOG_BASE {
     LOG_BASE(std::source_location loc = std::source_location::current()) : loc_(loc) {}
     template <typename... Args>
     void operator()(this auto&& self, const std::format_string<Args...>& fmt, Args&&... args) {
+        if (!Logger::getInstance().isEnabled() or !Logger::getInstance().shouldLog(self.LEVEL)) {
+            return;  // 如果当前日志级别不允许，则直接返回
+        }
         Logger::getInstance().log(self.LEVEL, self.loc_, fmt, std::forward<Args>(args)...);
     }
 

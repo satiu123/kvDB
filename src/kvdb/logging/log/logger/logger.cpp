@@ -23,4 +23,7 @@ void Logger::setLevel(LogLevel level) {
 bool Logger::shouldLog(LogLevel level) const {
     return level >= level_;
 }
+bool Logger::isEnabled() const {
+    return !sinks_.empty();
+}
 }  // namespace kvdb::logging
