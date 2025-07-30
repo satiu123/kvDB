@@ -20,7 +20,7 @@ enum class WalOpType : std::uint8_t {
 class WalRecord {
   public:
     // 构造函数
-    WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "");
+    WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "", std::uint64_t sequence_number = 0);
 
     // 从二进制数据反序列化一条记录
     static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
@@ -44,6 +44,9 @@ class WalRecord {
     std::string_view getValue() const {
         return value_;
     }
+    std::uint64_t getSequenceNumber() const {
+        return sequence_number_;
+    }
 
     /*
      * @brief 获取记录的字符串表示
@@ -51,24 +54,16 @@ class WalRecord {
      */
     std::string toString() const;
 
-    // 获取记录头部大小
-    static constexpr std::size_t getHeaderSize() {
-        return HEADER_SIZE;
-    }
-
     // 计算记录校验和
     std::uint32_t calculateChecksum() const;
     bool validateChecksum() const;
 
   private:
-    WalOpType op_type_;       // 操作类型
-    std::string key_;         // 键
-    std::string value_;       // 值（仅用于PUT操作）
-    std::uint32_t checksum_;  // 校验和，用于验证记录完整性
-
-    // 记录头部格式常量
-    static constexpr std::size_t HEADER_SIZE =
-        17;  // 1(op_type) + 4(key_size) + 4(value_size) + 4(checksum) + 4(total_size)
+    WalOpType op_type_;              // 操作类型
+    std::string key_;                // 键
+    std::string value_;              // 值（仅用于PUT操作）
+    std::uint32_t checksum_;         // 校验和，用于验证记录完整性
+    std::uint64_t sequence_number_;  // 序列号，用于记录顺序
 };
 
 }  // namespace kvdb::storage

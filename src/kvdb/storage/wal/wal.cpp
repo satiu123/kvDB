@@ -17,19 +17,19 @@ Wal::~Wal() {
 
 // 添加PUT操作记录
 bool Wal::appendPut(std::string_view key, std::string_view value) {
-    WalRecord record(WalOpType::PUT, key, value);
+    WalRecord record(WalOpType::PUT, key, value, ++sequence_number_);
     return appendRecord(record);
 }
 
 // 添加REMOVE操作记录
 bool Wal::appendRemove(std::string_view key) {
-    WalRecord record(WalOpType::REMOVE, key);
+    WalRecord record(WalOpType::REMOVE, key, "", ++sequence_number_);
     return appendRecord(record);
 }
 
 // 添加CLEAR操作记录
 bool Wal::appendClear() {
-    WalRecord record(WalOpType::CLEAR);
+    WalRecord record(WalOpType::CLEAR, "", "", ++sequence_number_);
     return appendRecord(record);
 }
 
@@ -122,77 +122,70 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
     // 移动到文件开头
     file_.seekg(0, std::ios::beg);
 
+    std::uint64_t max_seq = 0;
     // 一条一条读取并处理记录
     while (true) {
         auto record_result = readNextRecord();
         if (!record_result) {
-            LOG_ERROR()("{}", record_result.error());
+            if (record_result.error() != "到达WAL文件末尾") {
+                LOG_ERROR()("{}", record_result.error());
+            }
+            break;  // 到达文件末尾或发生错误
         }
-        std::unique_ptr<WalRecord>& record = record_result.value();
+        const auto& record = record_result.value();
         // 调用处理器处理记录
         if (!handler(*record)) {
             LOG_ERROR()("处理WAL记录时失败");
+            file_.seekg(current_pos);  // 恢复位置
             return false;
         }
+        max_seq = std::max(max_seq, record->getSequenceNumber());
     }
 
     // 检查是否因为读取错误而退出
     if (file_.bad()) {
         LOG_ERROR()("读取WAL文件时发生错误: {}", path_);
+        file_.seekg(current_pos);  // 恢复到原来的位置
         return false;
     }
-    file_.seekg(current_pos);  // 恢复到原来的位置
+
+    file_.clear();               // 清除eof等状态位
+    file_.seekg(current_pos);    // 恢复到原来的位置
+    sequence_number_ = max_seq;  // 更新序列号
     return true;
 }
 
 // 读取下一个记录
 std::expected<std::unique_ptr<WalRecord>, std::string> Wal::readNextRecord() {
-    if (!is_open_) {
-        return std::unexpected("WAL文件未打开");
+    if (!is_open_ || file_.peek() == std::ios::traits_type::eof()) {
+        return std::unexpected("WAL文件未打开或已到达末尾");
     }
 
-    // 检查是否到达文件末尾
-    if (file_.peek() == std::ios::traits_type::eof()) {
+    // 1. 读取记录的总长度 (4字节)
+    std::uint32_t total_size;
+    file_.read(reinterpret_cast<char*>(&total_size), sizeof(total_size));
+    if (file_.gcount() == 0) { // 正常到达文件末尾
         return std::unexpected("到达WAL文件末尾");
     }
-
-    // 先读取记录头部以确定记录大小
-    const std::size_t header_size = WalRecord::getHeaderSize();
-    std::vector<std::uint8_t> header(header_size);
-
-    // 读取头部
-    file_.read(reinterpret_cast<char*>(header.data()), header.size());
-
-    // 检查是否读取成功
-    if (file_.fail()) {
-        if (file_.eof()) {
-            LOG_ERROR()("读取WAL记录头部时遇到文件结束");
-            return std::unexpected("读取WAL记录头部时遇到文件结束");
-        }
-
-        LOG_ERROR()("读取WAL记录头部失败");
-        return std::unexpected("读取WAL记录头部失败");
+    if (!file_ || file_.gcount() != sizeof(total_size)) {
+        return std::unexpected("读取WAL记录长度失败，文件可能已损坏");
     }
 
-    // 从头部解析记录总大小
-    std::uint32_t total_size;
-    std::memcpy(&total_size, header.data() + 13,
-                sizeof(total_size));  // 总大小在头部的第13个字节
-
-    // 调整文件指针回到记录开头
-    file_.seekg(-static_cast<int>(header_size), std::ios::cur);
-
-    // 读取完整记录
+    // 2. 读取记录的剩余部分
+    // total_size 包含了长度本身的4个字节，所以剩余部分是 total_size - 4
+    if (total_size < sizeof(total_size)) { // 防止下溢
+        return std::unexpected("无效的WAL记录长度");
+    }
     std::vector<std::uint8_t> record_data(total_size);
-    file_.read(reinterpret_cast<char*>(record_data.data()), record_data.size());
+    // 将已经读取的长度信息写回向量的开头
+    std::memcpy(record_data.data(), &total_size, sizeof(total_size));
 
-    // 检查是否读取成功
-    if (file_.fail()) {
-        LOG_ERROR()("读取完整WAL记录失败");
-        return std::unexpected("读取完整WAL记录失败");
+    file_.read(reinterpret_cast<char*>(record_data.data() + sizeof(total_size)), total_size - sizeof(total_size));
+    if (!file_ || file_.gcount() != (total_size - sizeof(total_size))) {
+        return std::unexpected("读取WAL记录数据失败，文件可能已损坏");
     }
 
-    // 反序列化记录
+    // 3. 反序列化记录
     return WalRecord::deserialize(record_data);
 }
 
@@ -270,5 +263,15 @@ std::expected<std::vector<std::string>, std::string> Wal::getFormattedContent() 
         return std::unexpected("WAL文件内容格式化失败");
     }
     return formatted_lines;
+}
+
+// 获取最后的序列号
+std::uint64_t Wal::getLastSequenceNumber() const {
+    return sequence_number_.load();
+}
+
+// 设置当前序列号
+void Wal::setCurrentSequenceNumber(std::uint64_t seq) {
+    sequence_number_ = seq;
 }
 }  // namespace kvdb::storage

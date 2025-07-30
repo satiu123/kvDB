@@ -30,6 +30,7 @@ int main(int argc, char* argv[]) {
         db_path = argv[1];
     }
     kvdb::core::Database db(db_path);
+    db.setMemtableFlushThreshold(4);
     if (auto sink = kvdb::logging::FileSink::create(db_path + "/data/kvdb.log")) {
         kvdb::logging::Logger::getInstance().addSink(*sink);
     } else {

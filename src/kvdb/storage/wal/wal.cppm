@@ -87,12 +87,24 @@ class Wal {
      */
     std::expected<std::vector<std::string>, std::string> getFormattedContent() const;
 
-  private:
-    std::string path_;          // WAL文件路径
-    std::fstream file_;         // WAL文件流
-    mutable std::mutex mutex_;  // 互斥锁，用于保护并发访问
-    bool is_open_ = false;      // WAL文件是否打开
+    /**
+     * @brief 获取最后的序列号
+     * @return 最后的序列号
+     */
+    std::uint64_t getLastSequenceNumber() const;
 
+    /**
+     * @brief 设置当前序列号
+     * @param seq 序列号
+     */
+    void setCurrentSequenceNumber(std::uint64_t seq);
+
+  private:
+    std::string path_;                            // WAL文件路径
+    std::fstream file_;                           // WAL文件流
+    mutable std::mutex mutex_;                    // 互斥锁，用于保护并发访问
+    bool is_open_ = false;                        // WAL文件是否打开
+    std::atomic<std::uint64_t> sequence_number_{0};  // 序列号，用于记录操作顺序
     /**
      * @brief 打开WAL文件
      * @param truncate 是否截断文件

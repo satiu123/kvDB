@@ -13,7 +13,7 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-# 您的测试可执行文件定义（无需改动）
+# 测试可执行文件定义
 add_executable(kvdb_tests
     test_logger.cpp
     test_database.cpp
@@ -21,6 +21,7 @@ add_executable(kvdb_tests
     test_memtable.cpp
     test_compaction.cpp
     test_deletion.cpp
+    test_manifest.cpp
 )
 
 # 链接到 CMake 目标，GTest 的目标名称由 FetchContent 自动创建

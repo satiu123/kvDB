@@ -2,6 +2,7 @@ export module kvdb.core:database;
 
 import std;
 import kvdb.storage;
+export import kvdb.core.database.manifest;
 
 
 export namespace kvdb::core {
@@ -53,6 +54,8 @@ class Database {
 
     std::unique_ptr<storage::Wal> wal_;                        // WAL实例
     std::vector<std::unique_ptr<storage::SSTable>> sstables_;  // SSTable读取器
+    std::unique_ptr<database::ManifestFile> manifest_;         // MANIFEST文件
+    database::Manifest manifest_data_;                         // MANIFEST数据
 
     std::size_t memtable_flush_threshold_ = 1000;   // MemTable刷写阈值
     std::atomic<std::size_t> sstable_counter_ = 0;  // SSTable文件计数器
