@@ -12,26 +12,35 @@ namespace kvdb::core {
 Database::Database(std::string_view base_path) {
     auto data_path = std::filesystem::path(base_path) / "data";
     auto wal_path = data_path / "wal";
+    auto manifest_path = data_path / "manifest";
     sstables_path_ = (data_path / "sstables").string();
 
     std::filesystem::create_directories(wal_path);
     std::filesystem::create_directories(sstables_path_);
+    std::filesystem::create_directories(manifest_path);
 
     wal_ = std::make_unique<storage::Wal>((wal_path / "kvdb.wal").string());
+    manifest_ = std::make_unique<database::ManifestFile>(manifest_path.string());
+
     recover();
 }
 
 void Database::recover() {
-    // 1. 加载现有的SSTable
-    if (std::filesystem::exists(sstables_path_)) {
-        for (const auto& entry : std::filesystem::directory_iterator(sstables_path_)) {
-            const auto& path = entry.path();
-            if (entry.is_regular_file() && path.extension() == ".db" &&
-                path.filename().string().starts_with("sstable_")) {
-                auto sstable = std::make_unique<storage::SSTable>();
-                if (sstable->open(path.string())) {
-                    sstables_.push_back(std::move(sstable));
-                }
+    // 1. 加载 MANIFEST 文件
+    auto manifest_result = manifest_->load();
+    if (!manifest_result) {
+        LOG_ERROR()("加载 MANIFEST 文件失败: {}", manifest_result.error());
+        // Even if manifest fails to load, we can proceed with full WAL replay
+    } else {
+        manifest_data_ = std::move(manifest_result.value());
+    }
+
+    // 2. 加载SSTable
+    for (const auto& [level, files] : manifest_data_.sstables) {
+        for (const auto& file : files) {
+            auto sstable = std::make_unique<storage::SSTable>();
+            if (sstable->open((std::filesystem::path(sstables_path_) / file).string())) {
+                sstables_.push_back(std::move(sstable));
             }
         }
     }
@@ -39,8 +48,12 @@ void Database::recover() {
     std::ranges::sort(sstables_,
                       [](const auto& a, const auto& b) { return a->getPath() > b->getPath(); });
 
-    // 2. 重放WAL以恢复内存表
-    wal_->replay([this](const storage::WalRecord& record) {
+    // 3. 重放WAL以恢复内存表
+    std::uint64_t last_wal_seq = manifest_data_.last_wal_sequence_number;
+    wal_->replay([this, last_wal_seq](const storage::WalRecord& record) {
+        if (record.getSequenceNumber() <= last_wal_seq) {
+            return true;  // Skip records that are already reflected in an SSTable
+        }
         switch (record.getOpType()) {
             case storage::WalOpType::PUT: {
                 data_[std::string(record.getKey())] = std::string(record.getValue());
@@ -83,9 +96,10 @@ bool Database::put(std::string_view key, std::string_view value) {
             std::make_unique<std::map<std::string, std::string>>(std::move(data_));
         data_.clear();
 
-        std::string sstable_path = (std::filesystem::path(sstables_path_) /
-                                    ("sstable_" + std::to_string(sstable_counter_++) + ".db"))
-                                       .string();
+        std::string sstable_filename = "sstable_" + std::to_string(sstable_counter_++) + ".db";
+        std::string sstable_path =
+            (std::filesystem::path(sstables_path_) / sstable_filename).string();
+
         if (storage::SSTable::buildFrom(sstable_path, *immutable_memtable_)) {
             LOG_INFO()("成功将内存表刷写到 {}", sstable_path);
             immutable_memtable_.reset();
@@ -93,6 +107,15 @@ bool Database::put(std::string_view key, std::string_view value) {
             if (sstable->open(sstable_path)) {
                 sstables_.insert(sstables_.begin(), std::move(sstable));
             }
+
+            // 更新并存储 MANIFEST
+            manifest_data_.sstables[0].push_back(sstable_filename);
+            manifest_data_.last_wal_sequence_number = wal_->getLastSequenceNumber();
+            auto store_result = manifest_->store(manifest_data_);
+            if (!store_result) {
+                LOG_ERROR()("存储 MANIFEST 文件失败: {}", store_result.error());
+            }
+
         } else {
             LOG_ERROR()("将内存表刷写到 {} 失败", sstable_path);
         }
@@ -171,6 +194,11 @@ void Database::clear() {
             }
         }
     }
+
+    // 清空并存储 MANIFEST
+    manifest_data_ = database::Manifest{};
+    manifest_->store(manifest_data_);
+
     LOG_DEBUG()("CLEAR 成功");
 }
 

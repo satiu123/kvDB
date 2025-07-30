@@ -3,26 +3,10 @@ module kvdb.storage.sstable;
 import std;
 import kvdb.logging.log;
 
+import kvdb.core.binary;
+
 using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR;
 namespace kvdb::storage {
-// 辅助函数，用于写入带有长度的字符串
-static bool writeString(std::ofstream& file, std::string_view str) {
-    std::uint32_t len = str.length();
-    file.write(reinterpret_cast<const char*>(&len), sizeof(len));
-    file.write(str.data(), len);
-    return file.good();
-}
-
-// 辅助函数，用于读取带有长度的字符串
-static bool readString(std::ifstream& file, std::string& str) {
-    std::uint32_t len;
-    file.read(reinterpret_cast<char*>(&len), sizeof(len));
-    if (!file)
-        return false;
-    str.resize(len);
-    file.read(&str[0], len);
-    return file.good();
-}
 
 SSTable::Builder::Builder(std::string_view path, std::size_t block_size_threshold)
     : path_(path), block_size_threshold_(block_size_threshold) {
@@ -72,8 +56,8 @@ bool SSTable::Builder::finish() {
     // 写入索引块
     std::uint64_t index_block_offset = offset_;
     for (const auto& [key, block_offset] : index_) {
-        writeString(file_, key);
-        file_.write(reinterpret_cast<const char*>(&block_offset), sizeof(block_offset));
+        kvdb::core::binary::write_string(file_, key);
+        kvdb::core::binary::write_uint64(file_, block_offset);
     }
     std::uint64_t index_block_size = static_cast<std::uint64_t>(file_.tellp()) - index_block_offset;
 
@@ -111,27 +95,28 @@ bool SSTable::open(std::string_view path) {
 }
 
 bool SSTable::loadIndex() {
+    // 读取尾注
     file_.seekg(-static_cast<std::streamoff>(sizeof(Footer)), std::ios::end);
     file_.read(reinterpret_cast<char*>(&footer_), sizeof(Footer));
 
     if (footer_.magic != SSTABLE_MAGIC) {
         return false;
     }
-
+    // 读取索引块
     file_.seekg(footer_.index_block_offset);
     std::string index_data(footer_.index_block_size, '\0');
     file_.read(&index_data[0], footer_.index_block_size);
-
+    // 解析索引数据
     std::istringstream index_stream(index_data);
     while (index_stream.peek() != std::ios::traits_type::eof()) {
-        std::string key;
-        std::uint64_t offset;
-        std::uint32_t key_len;
-        index_stream.read(reinterpret_cast<char*>(&key_len), sizeof(key_len));
-        key.resize(key_len);
-        index_stream.read(&key[0], key_len);
-        index_stream.read(reinterpret_cast<char*>(&offset), sizeof(offset));
-        index_.emplace_back(key, offset);
+        auto key_res = kvdb::core::binary::read_string(index_stream);
+        if (!key_res)
+            break;
+        auto offset_res = kvdb::core::binary::read_uint64(index_stream);
+        if (!offset_res)
+            break;
+
+        index_.emplace_back(*key_res, *offset_res);
     }
     return true;
 }
@@ -146,9 +131,16 @@ std::optional<std::string> SSTable::find(std::string_view key) {
     file_.seekg(it->second);
     // 这是一个简化实现。真正的实现会读取整个块。
     std::string file_key, file_value;
-    while (readString(file_, file_key) && readString(file_, file_value)) {
-        if (file_key == key) {
-            return file_value;
+    while (true) {
+        auto key_res = kvdb::core::binary::read_string(file_);
+        if (!key_res)
+            break;
+        auto value_res = kvdb::core::binary::read_string(file_);
+        if (!value_res)
+            break;
+
+        if (*key_res == key) {
+            return *value_res;
         }
         if (static_cast<std::uint64_t>(file_.tellg()) >= it->second + 4096) {  // 块大小
             break;
@@ -163,9 +155,14 @@ std::map<std::string, std::string> SSTable::readAll() {
     file_.clear();  // 重置流状态（例如，来自先前读取的EOF）
     file_.seekg(0);
     std::string key, value;
-    while (static_cast<std::uint64_t>(file_.tellg()) < footer_.index_block_offset &&
-           readString(file_, key) && readString(file_, value)) {
-        data[key] = value;
+    while (static_cast<std::uint64_t>(file_.tellg()) < footer_.index_block_offset) {
+        auto key_res = kvdb::core::binary::read_string(file_);
+        if (!key_res)
+            break;
+        auto value_res = kvdb::core::binary::read_string(file_);
+        if (!value_res)
+            break;
+        data[*key_res] = *value_res;
     }
     return data;
 }
