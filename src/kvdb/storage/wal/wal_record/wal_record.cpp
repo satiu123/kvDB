@@ -96,17 +96,18 @@ std::vector<std::uint8_t> WalRecord::serialize() const {
 }
 
 // 从二进制数据反序列化记录
-std::unique_ptr<WalRecord> WalRecord::deserialize(const std::vector<std::uint8_t>& data) {
+std::expected<std::unique_ptr<WalRecord>, std::string> WalRecord::deserialize(
+    const std::vector<std::uint8_t>& data) {
     if (data.empty()) {
         return nullptr;
     }
     return deserialize(data.data(), data.size());
 }
 
-std::unique_ptr<WalRecord> WalRecord::deserialize(const std::uint8_t* data, std::size_t size) {
+std::expected<std::unique_ptr<WalRecord>, std::string> WalRecord::deserialize(
+    const std::uint8_t* data, std::size_t size) {
     if (size < HEADER_SIZE) {
-        LOG_ERROR()("数据太短，无法反序列化WalRecord");
-        throw std::runtime_error("数据太短，无法反序列化WalRecord");
+        return std::unexpected("数据太短，无法反序列化WalRecord");
     }
 
     std::size_t offset = 0;
@@ -136,14 +137,12 @@ std::unique_ptr<WalRecord> WalRecord::deserialize(const std::uint8_t* data, std:
 
     // 验证记录大小
     if (record_size != size) {
-        LOG_ERROR()("记录大小不匹配，期望: {}, 实际: {}", record_size, size);
-        throw std::runtime_error("记录大小不匹配");
+        return std::unexpected("记录大小不匹配");
     }
 
     // 验证是否有足够的数据
     if (size < HEADER_SIZE + key_size + value_size) {
-        LOG_ERROR()("数据不完整，无法反序列化WalRecord");
-        throw std::runtime_error("数据不完整，无法反序列化WalRecord");
+        return std::unexpected("数据不完整，无法反序列化WalRecord");
     }
 
     // 提取键
@@ -165,8 +164,7 @@ std::unique_ptr<WalRecord> WalRecord::deserialize(const std::uint8_t* data, std:
 
     // 验证校验和
     if (record->calculateChecksum() != stored_checksum) {
-        LOG_ERROR()("校验和不匹配，记录可能已损坏");
-        throw std::runtime_error("校验和不匹配，记录可能已损坏");
+        return std::unexpected("校验和不匹配，记录可能已损坏");
     }
 
     return record;
@@ -179,7 +177,7 @@ std::size_t WalRecord::size() const {
 
 // 获取记录的字符串表示
 std::string WalRecord::toString() const {
-    return std::format("WalRecord(op_type={}, key='{}', value='{}')", static_cast<int>(op_type_),
+    return std::format("WalRecord(操作类型={}, key='{}', value='{}')", static_cast<int>(op_type_),
                        key_, value_);
 }
 

@@ -4,7 +4,7 @@ import std;
 
 export namespace kvdb::storage {
 
-// Magic number for file validation
+// 用于文件验证的魔数
 constexpr std::uint64_t SSTABLE_MAGIC = 0x4B56444253535441;  // "KVDB_SSTA"
 
 struct Footer {
@@ -35,10 +35,10 @@ class SSTable {
         std::string last_key_in_block_;
     };
 
-    // Static function to build an SSTable from a map
+    // 从map构建SSTable的静态函数
     static bool buildFrom(std::string_view path, const std::map<std::string, std::string>& data);
 
-    // Member functions for reading
+    // 用于读取的成员函数
     bool open(std::string_view path);
     std::optional<std::string> find(std::string_view key);
     std::map<std::string, std::string> readAll();

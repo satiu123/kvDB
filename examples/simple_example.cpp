@@ -2,23 +2,23 @@ import std;
 import kvdb.core;
 
 int main() {
-    // Create a database instance in the "my_db" directory
+    // 在 "my_db" 目录中创建一个数据库实例
     kvdb::core::Database db("my_db");
 
-    // Put some key-value pairs
+    // 放入一些键值对
     db.put("hello", "world");
     db.put("gemini", "is awesome");
 
-    // Get a value
+    // 获取一个值
     if (auto value = db.get("hello")) {
-        std::cout << "Found key 'hello', value: " << *value << std::endl;
+        std::cout << "找到键 'hello', 值为: " << *value << std::endl;
     }
 
-    // Remove a key
+    // 删除一个键
     db.remove("gemini");
 
-    // Check size
-    std::cout << "Database size: " << db.size() << std::endl;
+    // 检查大小
+    std::cout << "数据库大小: " << db.size() << std::endl;
 
     return 0;
 }

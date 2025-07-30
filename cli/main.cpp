@@ -9,18 +9,18 @@ std::vector<std::string> split_input(const std::string& input);
 
 // 打印使用帮助
 void print_usage() {
-    std::cout << "Commands:\n"
-              << "  put <key> <value>    - Insert or update a key-value pair.\n"
-              << "  get <key>            - Retrieve the value for a key.\n"
-              << "  remove <key>         - Delete a key.\n"
-              << "  exists <key>         - Check if a key exists.\n"
-              << "  size                 - Get the number of keys.\n"
-              << "  keys                 - List all keys.\n"
-              << "  clear                - Clear the database.\n"
-              << "  compact              - Compact the database.\n"
-              << "  wal                  - Print the WAL records.\n"
-              << "  exit/quit            - Exit the CLI.\n"
-              << "  help                 - Show this help message.\n";
+    std::cout << "命令:\n"
+              << "  put <key> <value>    - 插入或更新一个键值对。\n"
+              << "  get <key>            - 检索一个键的值。\n"
+              << "  remove <key>         - 删除一个键。\n"
+              << "  exists <key>         - 检查一个键是否存在。\n"
+              << "  size                 - 获取键的数量。\n"
+              << "  keys                 - 列出所有的键。\n"
+              << "  clear                - 清空数据库。\n"
+              << "  compact              - 压缩数据库。\n"
+              << "  wal                  - 打印WAL记录。\n"
+              << "  exit/quit            - 退出CLI。\n"
+              << "  help                 - 显示此帮助信息。\n";
 }
 
 // 主函数
@@ -30,9 +30,12 @@ int main(int argc, char* argv[]) {
         db_path = argv[1];
     }
     kvdb::core::Database db(db_path);
-    kvdb::logging::Logger::getInstance().addSink(
-        std::make_shared<kvdb::logging::FileSink>(db_path + "/kvdb.log"));
-    std::cout << "Welcome to kvDB CLI!\n";
+    if (auto sink = kvdb::logging::FileSink::create(db_path + "/data/kvdb.log")) {
+        kvdb::logging::Logger::getInstance().addSink(*sink);
+    } else {
+        std::cerr << "创建文件日志接收器失败: " << sink.error() << std::endl;
+    }
+    std::cout << "欢迎来到 kvDB 命令行界面!\n";
     std::string line;
     std::cout << "kvdb> ";
     while (std::getline(std::cin, line)) {
@@ -47,7 +50,7 @@ int main(int argc, char* argv[]) {
         std::cout << "kvdb> ";
     }
 
-    std::cout << "\nGoodbye!" << std::endl;
+    std::cout << "\n再见!" << std::endl;
     return 0;
 }
 
@@ -64,20 +67,20 @@ void process_command(kvdb::core::Database& db, const std::string& line) {
         if (db.put(args[1], args[2])) {
             std::cout << "OK\n";
         } else {
-            std::cerr << "Error: Failed to put key.\n";
+            std::cerr << "错误: 存入键失败。\n";
         }
     } else if (command == "get" && args.size() == 2) {
         auto value = db.get(args[1]);
         if (value) {
             std::cout << *value << '\n';
         } else {
-            std::cout << "(nil)\n";
+            std::cout << "(空)\n";
         }
     } else if (command == "remove" && args.size() == 2) {
         if (db.remove(args[1])) {
             std::cout << "OK\n";
         } else {
-            std::cerr << "Error: Key not found or failed to remove.\n";
+            std::cerr << "错误: 键未找到或删除失败。\n";
         }
     } else if (command == "exists" && args.size() == 2) {
         if (db.exists(args[1])) {
@@ -102,9 +105,9 @@ void process_command(kvdb::core::Database& db, const std::string& line) {
     } else if (command == "help") {
         print_usage();
     } else if (command == "quit" || command == "exit") {
-        // This case is handled in the main loop, but we keep it here for clarity
+        // 这个情况在主循环中处理，但为了清晰起见保留在此处
     } else {
-        std::cout << "Unknown command: " << command << std::endl;
+        std::cout << "未知命令: " << command << std::endl;
         print_usage();
     }
 }

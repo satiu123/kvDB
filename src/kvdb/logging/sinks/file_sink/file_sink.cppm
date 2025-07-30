@@ -5,19 +5,25 @@ import kvdb.logging.sinks.log_sink;
 import kvdb.logging.log.log_record;
 export namespace kvdb::logging {
 
-// 文件日志记录器
+// 文件日志接收器
 class FileSink : public LogSink {
+  public:
+    ~FileSink() override;
+
+    // 工厂函数，用于安全地创建FileSink实例
+    static std::expected<std::shared_ptr<FileSink>, std::string> create(
+        std::string_view filePath);
+
+    bool log(const logging::LogRecord& record) override;  // 实现日志记录
+    bool flush() override;                                // 刷新文件流
+
   private:
+    explicit FileSink(std::string_view filePath);
+    bool open();
+
     std::ofstream fileStream_;
     std::string filePath_;
     std::mutex mutex_;  // 确保线程安全
-
-  public:
-    explicit FileSink(std::string_view filePath);
-    ~FileSink() override;
-
-    void log(const logging::LogRecord& record) override;  // 实现日志记录
-    void flush() override;                                // 刷新文件流
 };
 
 }  // namespace kvdb::logging

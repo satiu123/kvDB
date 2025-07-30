@@ -104,7 +104,7 @@ class Wal {
      * @brief 读取下一个记录
      * @return 下一个记录，如果到达文件末尾或出错则返回nullptr
      */
-    std::unique_ptr<WalRecord> readNextRecord();
+    std::expected<std::unique_ptr<WalRecord>, std::string> readNextRecord();
 };
 
 }  // namespace kvdb::storage

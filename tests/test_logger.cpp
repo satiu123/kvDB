@@ -39,11 +39,11 @@ TEST_F(LoggerTest, BasicLogFunctionality) {
     logger.addSink(std::make_shared<ConsoleSink>());
 
     // 添加文件接收器
-    try {
-        logger.addSink(std::make_shared<FileSink>(log_path));
+    if (auto sink = FileSink::create(log_path)) {
+        logger.addSink(*sink);
         std::cout << "成功添加文件日志接收器\n";
-    } catch (const std::exception& e) {
-        std::cerr << "添加文件日志接收器失败: " << e.what() << "\n";
+    } else {
+        std::cerr << "添加文件日志接收器失败: " << sink.error() << "\n";
     }
 
     // 设置日志级别
@@ -76,3 +76,4 @@ TEST_F(LoggerTest, BasicLogFunctionality) {
     logger.removeAllSinks();
     std::cout << "日志测试完成\n";
 }
+

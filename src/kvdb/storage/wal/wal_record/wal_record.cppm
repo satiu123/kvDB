@@ -23,8 +23,10 @@ class WalRecord {
     WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "");
 
     // 从二进制数据反序列化一条记录
-    static std::unique_ptr<WalRecord> deserialize(const std::vector<std::uint8_t>& data);
-    static std::unique_ptr<WalRecord> deserialize(const std::uint8_t* data, std::size_t size);
+    static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
+        const std::vector<std::uint8_t>& data);
+    static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
+        const std::uint8_t* data, std::size_t size);
 
     // 序列化记录为二进制数据
     std::vector<std::uint8_t> serialize() const;

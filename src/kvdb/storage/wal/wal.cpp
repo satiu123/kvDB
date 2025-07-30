@@ -123,8 +123,12 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
     file_.seekg(0, std::ios::beg);
 
     // 一条一条读取并处理记录
-    std::unique_ptr<WalRecord> record;
-    while ((record = readNextRecord()) != nullptr) {
+    while (true) {
+        auto record_result = readNextRecord();
+        if (!record_result) {
+            LOG_ERROR()("{}", record_result.error());
+        }
+        std::unique_ptr<WalRecord>& record = record_result.value();
         // 调用处理器处理记录
         if (!handler(*record)) {
             LOG_ERROR()("处理WAL记录时失败");
@@ -142,59 +146,54 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
 }
 
 // 读取下一个记录
-std::unique_ptr<WalRecord> Wal::readNextRecord() {
+std::expected<std::unique_ptr<WalRecord>, std::string> Wal::readNextRecord() {
     if (!is_open_) {
-        return nullptr;
+        return std::unexpected("WAL文件未打开");
     }
 
     // 检查是否到达文件末尾
     if (file_.peek() == std::ios::traits_type::eof()) {
-        return nullptr;
+        return std::unexpected("到达WAL文件末尾");
     }
 
-    try {
-        // 先读取记录头部以确定记录大小
-        const std::size_t header_size = WalRecord::getHeaderSize();
-        std::vector<std::uint8_t> header(header_size);
+    // 先读取记录头部以确定记录大小
+    const std::size_t header_size = WalRecord::getHeaderSize();
+    std::vector<std::uint8_t> header(header_size);
 
-        // 读取头部
-        file_.read(reinterpret_cast<char*>(header.data()), header.size());
+    // 读取头部
+    file_.read(reinterpret_cast<char*>(header.data()), header.size());
 
-        // 检查是否读取成功
-        if (file_.fail()) {
-            if (file_.eof()) {
-                LOG_ERROR()("读取WAL记录头部时遇到文件结束");
-                return nullptr;
-            }
-
-            LOG_ERROR()("读取WAL记录头部失败");
-            return nullptr;
+    // 检查是否读取成功
+    if (file_.fail()) {
+        if (file_.eof()) {
+            LOG_ERROR()("读取WAL记录头部时遇到文件结束");
+            return std::unexpected("读取WAL记录头部时遇到文件结束");
         }
 
-        // 从头部解析记录总大小
-        std::uint32_t total_size;
-        std::memcpy(&total_size, header.data() + 13,
-                    sizeof(total_size));  // 总大小在头部的第13个字节
-
-        // 调整文件指针回到记录开头
-        file_.seekg(-static_cast<int>(header_size), std::ios::cur);
-
-        // 读取完整记录
-        std::vector<std::uint8_t> record_data(total_size);
-        file_.read(reinterpret_cast<char*>(record_data.data()), record_data.size());
-
-        // 检查是否读取成功
-        if (file_.fail()) {
-            LOG_ERROR()("读取完整WAL记录失败");
-            return nullptr;
-        }
-
-        // 反序列化记录
-        return WalRecord::deserialize(record_data);
-    } catch (const std::exception& e) {
-        LOG_ERROR()("反序列化WAL记录时发生异常: {}", e.what());
-        return nullptr;
+        LOG_ERROR()("读取WAL记录头部失败");
+        return std::unexpected("读取WAL记录头部失败");
     }
+
+    // 从头部解析记录总大小
+    std::uint32_t total_size;
+    std::memcpy(&total_size, header.data() + 13,
+                sizeof(total_size));  // 总大小在头部的第13个字节
+
+    // 调整文件指针回到记录开头
+    file_.seekg(-static_cast<int>(header_size), std::ios::cur);
+
+    // 读取完整记录
+    std::vector<std::uint8_t> record_data(total_size);
+    file_.read(reinterpret_cast<char*>(record_data.data()), record_data.size());
+
+    // 检查是否读取成功
+    if (file_.fail()) {
+        LOG_ERROR()("读取完整WAL记录失败");
+        return std::unexpected("读取完整WAL记录失败");
+    }
+
+    // 反序列化记录
+    return WalRecord::deserialize(record_data);
 }
 
 // 截断WAL文件
@@ -261,9 +260,10 @@ std::expected<std::vector<std::string>, std::string> Wal::getFormattedContent() 
     while (true) {
         auto record = this_ptr->readNextRecord();
         if (!record) {
-            break;  // 到达文件末尾或读取错误
+            LOG_ERROR()("{}", record.error());
+            break;
         }
-        formatted_lines.emplace_back(record->toString());
+        formatted_lines.emplace_back(record.value()->toString());
     }
     this_ptr->file_.seekg(current_pos);  // 恢复文件位置
     if (formatted_lines.empty()) {

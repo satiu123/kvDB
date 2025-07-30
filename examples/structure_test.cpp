@@ -2,22 +2,22 @@ import std;
 import kvdb.core;
 
 int main() {
-    // Create a database instance in the "structure_test_db" directory
+    // 在 "structure_test_db" 目录中创建一个数据库实例
     kvdb::core::Database db("structure_test_db");
 
-    // Set a low threshold to observe flushing
+    // 设置一个较低的阈值以观察刷写过程
     db.setMemtableFlushThreshold(3);
 
-    // Add some data
+    // 添加一些数据
     db.put("key1", "value1");
     db.put("key2", "value2");
-    db.put("key3", "value3");  // This should trigger a flush
+    db.put("key3", "value3");  // 这里应该会触发一次刷写
 
-    std::cout << "Database structure after first flush." << std::endl;
+    std::cout << "第一次刷写后的数据库结构。" << std::endl;
 
     db.put("key4", "value4");
 
-    std::cout << "Database structure after adding more data." << std::endl;
+    std::cout << "添加更多数据后的数据库结构。" << std::endl;
 
     return 0;
 }

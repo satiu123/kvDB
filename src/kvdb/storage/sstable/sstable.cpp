@@ -5,7 +5,7 @@ import kvdb.logging.log;
 
 using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR;
 namespace kvdb::storage {
-// Helper function to write a string with its length
+// 辅助函数，用于写入带有长度的字符串
 static bool writeString(std::ofstream& file, std::string_view str) {
     std::uint32_t len = str.length();
     file.write(reinterpret_cast<const char*>(&len), sizeof(len));
@@ -13,7 +13,7 @@ static bool writeString(std::ofstream& file, std::string_view str) {
     return file.good();
 }
 
-// Helper function to read a string with its length
+// 辅助函数，用于读取带有长度的字符串
 static bool readString(std::ifstream& file, std::string& str) {
     std::uint32_t len;
     file.read(reinterpret_cast<char*>(&len), sizeof(len));
@@ -33,7 +33,7 @@ void SSTable::Builder::add(std::string_view key, std::string_view value) {
     if (!file_.is_open())
         return;
 
-    // Simple serialization for key and value
+    // 简单的键值序列化
     std::uint32_t key_len = key.length();
     std::uint32_t val_len = value.length();
 
@@ -64,12 +64,12 @@ bool SSTable::Builder::finish() {
     if (!file_.is_open())
         return false;
 
-    // Write the last remaining block if any
+    // 如果有剩余数据，则写入最后一个块
     if (!current_block_data_.empty()) {
         writeBlock();
     }
 
-    // Write the index block
+    // 写入索引块
     std::uint64_t index_block_offset = offset_;
     for (const auto& [key, block_offset] : index_) {
         writeString(file_, key);
@@ -77,14 +77,14 @@ bool SSTable::Builder::finish() {
     }
     std::uint64_t index_block_size = static_cast<std::uint64_t>(file_.tellp()) - index_block_offset;
 
-    // Write the footer
+    // 写入尾注
     Footer footer;
     footer.index_block_offset = index_block_offset;
     footer.index_block_size = index_block_size;
     file_.write(reinterpret_cast<const char*>(&footer), sizeof(footer));
 
     file_.close();
-    LOG_INFO()("SSTable '{}' finished successfully.", path_);
+    LOG_INFO()("SSTable '{}' 成功完成。", path_);
     return true;
 }
 
@@ -144,13 +144,13 @@ std::optional<std::string> SSTable::find(std::string_view key) {
     }
 
     file_.seekg(it->second);
-    // This is a simplification. A real implementation would read the whole block.
+    // 这是一个简化实现。真正的实现会读取整个块。
     std::string file_key, file_value;
     while (readString(file_, file_key) && readString(file_, file_value)) {
         if (file_key == key) {
             return file_value;
         }
-        if (file_.tellg() >= it->second + 4096) {  // block size
+        if (static_cast<std::uint64_t>(file_.tellg()) >= it->second + 4096) {  // 块大小
             break;
         }
     }
@@ -160,7 +160,7 @@ std::optional<std::string> SSTable::find(std::string_view key) {
 
 std::map<std::string, std::string> SSTable::readAll() {
     std::map<std::string, std::string> data;
-    file_.clear();  // Reset stream state (e.g., EOF from previous reads)
+    file_.clear();  // 重置流状态（例如，来自先前读取的EOF）
     file_.seekg(0);
     std::string key, value;
     while (static_cast<std::uint64_t>(file_.tellg()) < footer_.index_block_offset &&

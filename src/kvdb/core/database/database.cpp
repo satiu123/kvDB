@@ -22,7 +22,7 @@ Database::Database(std::string_view base_path) {
 }
 
 void Database::recover() {
-    // 1. Load existing SSTables
+    // 1. 加载现有的SSTable
     if (std::filesystem::exists(sstables_path_)) {
         for (const auto& entry : std::filesystem::directory_iterator(sstables_path_)) {
             const auto& path = entry.path();
@@ -35,11 +35,11 @@ void Database::recover() {
             }
         }
     }
-    // Sort SSTables by name (newest first)
+    // 按名称对SSTable进行排序（最新的在前）
     std::ranges::sort(sstables_,
                       [](const auto& a, const auto& b) { return a->getPath() > b->getPath(); });
 
-    // 2. Replay the WAL to recover the memtable
+    // 2. 重放WAL以恢复内存表
     wal_->replay([this](const storage::WalRecord& record) {
         switch (record.getOpType()) {
             case storage::WalOpType::PUT: {
@@ -47,7 +47,7 @@ void Database::recover() {
                 break;
             }
             case storage::WalOpType::REMOVE: {
-                data_[std::string(record.getKey())] = "";  // Tombstone
+                data_[std::string(record.getKey())] = "";  // 墓碑
                 break;
             }
             case storage::WalOpType::CLEAR: {
@@ -57,7 +57,7 @@ void Database::recover() {
         }
         return true;
     });
-    LOG_INFO()("Database recovered. {} SSTables loaded, {} records in memtable.", sstables_.size(),
+    LOG_INFO()("数据库已恢复。加载了 {} 个SSTable，内存表中有 {} 条记录。", sstables_.size(),
                data_.size());
 }
 
@@ -70,15 +70,15 @@ bool Database::put(std::string_view key, std::string_view value) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (!wal_->appendPut(key, value)) {
-        LOG_ERROR()("Failed to write to WAL: PUT key={}", key);
+        LOG_ERROR()("写入WAL失败: PUT key={}", key);
         return false;
     }
 
     data_[std::string(key)] = value;
-    LOG_DEBUG()("PUT successful: key={}, value={}", key, value);
+    LOG_DEBUG()("PUT 成功: key={}, value={}", key, value);
 
     if (data_.size() >= memtable_flush_threshold_) {
-        LOG_INFO()("MemTable is full. Freezing and creating a new one.");
+        LOG_INFO()("内存表已满。正在冻结并创建新的内存表。");
         immutable_memtable_ =
             std::make_unique<std::map<std::string, std::string>>(std::move(data_));
         data_.clear();
@@ -87,14 +87,14 @@ bool Database::put(std::string_view key, std::string_view value) {
                                     ("sstable_" + std::to_string(sstable_counter_++) + ".db"))
                                        .string();
         if (storage::SSTable::buildFrom(sstable_path, *immutable_memtable_)) {
-            LOG_INFO()("Successfully flushed memtable to {}", sstable_path);
+            LOG_INFO()("成功将内存表刷写到 {}", sstable_path);
             immutable_memtable_.reset();
             auto sstable = std::make_unique<storage::SSTable>();
             if (sstable->open(sstable_path)) {
                 sstables_.insert(sstables_.begin(), std::move(sstable));
             }
         } else {
-            LOG_ERROR()("Failed to flush memtable to {}", sstable_path);
+            LOG_ERROR()("将内存表刷写到 {} 失败", sstable_path);
         }
     }
 
@@ -137,12 +137,12 @@ bool Database::remove(std::string_view key) {
     }
 
     if (!wal_->appendRemove(key)) {
-        LOG_ERROR()("Failed to write to WAL: REMOVE key={}", key);
+        LOG_ERROR()("写入WAL失败: REMOVE key={}", key);
         return false;
     }
 
     data_[std::string(key)] = "";
-    LOG_DEBUG()("REMOVE successful (tombstone): key={}", key);
+    LOG_DEBUG()("REMOVE 成功 (墓碑): key={}", key);
 
     return true;
 }
@@ -155,7 +155,7 @@ void Database::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (!wal_->appendClear()) {
-        LOG_ERROR()("Failed to write to WAL: CLEAR");
+        LOG_ERROR()("写入WAL失败: CLEAR");
         return;
     }
 
@@ -171,7 +171,7 @@ void Database::clear() {
             }
         }
     }
-    LOG_DEBUG()("CLEAR successful");
+    LOG_DEBUG()("CLEAR 成功");
 }
 
 bool Database::exists(std::string_view key) const {
@@ -209,10 +209,10 @@ std::vector<std::string> Database::keys() const {
 
 void Database::compact() {
     std::lock_guard<std::mutex> lock(mutex_);
-    LOG_INFO()("Starting compaction...");
+    LOG_INFO()("开始压缩...");
 
     if (sstables_.size() <= 1 && immutable_memtable_ == nullptr) {
-        LOG_INFO()("Not enough data to compact.");
+        LOG_INFO()("没有足够的数据进行压缩。");
         return;
     }
 
@@ -242,7 +242,7 @@ void Database::compact() {
          ("sstable_compacted_" + std::to_string(sstable_counter_++) + ".db"))
             .string();
     if (storage::SSTable::buildFrom(new_sstable_path, all_data)) {
-        LOG_INFO()("Compaction successful. New SSTable: {}", new_sstable_path);
+        LOG_INFO()("压缩成功。新的SSTable: {}", new_sstable_path);
 
         std::vector<std::string> old_paths;
         for (const auto& sstable : sstables_) {
@@ -263,7 +263,7 @@ void Database::compact() {
         }
 
     } else {
-        LOG_ERROR()("Compaction failed.");
+        LOG_ERROR()("压缩失败。");
     }
 }
 
