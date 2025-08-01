@@ -215,7 +215,7 @@ std::vector<std::string> Database::keys() const {
     std::vector<std::string> all_keys;
     std::map<std::string, std::string> all_data = get_all_data();
     for (const auto& [key, value] : all_data) {
-        all_keys.emplace_back(std::move(key));
+        all_keys.push_back(key);
     }
     return all_keys;
 }
