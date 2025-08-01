@@ -38,6 +38,7 @@ class Database {
 
   private:
     void recover();
+    void flushMemtableIfNeeded();
     std::map<std::string, std::string> get_all_data() const;
     std::optional<std::string> get_locked(std::string_view key) const;
 
