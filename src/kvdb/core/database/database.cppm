@@ -32,19 +32,14 @@ class Database {
 
     // 配置
     void setMemtableFlushThreshold(std::size_t threshold);
-    void printWALRecords() const {
-        auto records = wal_->getFormattedContent();
-        if (records) {
-            for (const auto& record : *records) {
-                std::cout << record << std::endl;
-            }
-        } else {
-            std::cerr << "获取WAL记录失败: " << records.error() << std::endl;
-        }
-    }
+    void printWALRecords() const;
+    void printSSTables() const;
+    void printManifest() const;
 
   private:
     void recover();
+    void flushMemtableIfNeeded();
+    std::map<std::string, std::string> get_all_data() const;
     std::optional<std::string> get_locked(std::string_view key) const;
 
     std::string sstables_path_;

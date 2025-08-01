@@ -19,6 +19,8 @@ void print_usage() {
               << "  clear                - 清空数据库。\n"
               << "  compact              - 压缩数据库。\n"
               << "  wal                  - 打印WAL记录。\n"
+              << "  sstables             - 打印SSTable文件列表。\n"
+              << "  manifest             - 打印MANIFEST文件内容。\n"
               << "  exit/quit            - 退出CLI。\n"
               << "  help                 - 显示此帮助信息。\n";
 }
@@ -103,6 +105,10 @@ void process_command(kvdb::core::Database& db, const std::string& line) {
         std::cout << "OK\n";
     } else if (command == "wal" && args.size() == 1) {
         db.printWALRecords();
+    } else if (command == "sstables" && args.size() == 1) {
+        db.printSSTables();
+    } else if (command == "manifest" && args.size() == 1) {
+        db.printManifest();
     } else if (command == "help") {
         print_usage();
     } else if (command == "quit" || command == "exit") {
