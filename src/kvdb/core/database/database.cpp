@@ -114,6 +114,11 @@ bool Database::put(std::string_view key, std::string_view value) {
             auto store_result = manifest_->store(manifest_data_);
             if (!store_result) {
                 LOG_ERROR()("存储 MANIFEST 文件失败: {}", store_result.error());
+            } else {
+                // SSTable 和 MANIFEST 都已成功写入，现在可以安全地截断 WAL
+                if (!wal_->truncate()) {
+                    LOG_ERROR()("截断 WAL 文件失败");
+                }
             }
 
         } else {

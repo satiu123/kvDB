@@ -42,6 +42,7 @@ class Database {
             std::cerr << "获取WAL记录失败: " << records.error() << std::endl;
         }
     }
+    void printSSTable() const {}
 
   private:
     void recover();
