@@ -162,7 +162,7 @@ std::map<std::string, std::string> SSTable::readAll() {
         auto value_res = kvdb::core::binary::read_string(file_);
         if (!value_res)
             break;
-        data[*key_res] = *value_res;
+        data.emplace(std::move(*key_res), std::move(*value_res));
     }
     return data;
 }

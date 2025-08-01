@@ -211,33 +211,45 @@ bool Database::exists(std::string_view key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     return get_locked(key).has_value();
 }
-
-std::vector<std::string> Database::keys() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+std::map<std::string, std::string> Database::get_all_data() const {
     std::map<std::string, std::string> all_data;
 
+    // 从SSTables读取数据
     for (const auto& sstable : std::ranges::reverse_view(sstables_)) {
         auto sstable_data = sstable->readAll();
         for (const auto& [key, value] : sstable_data) {
             all_data[key] = value;
         }
     }
+
+    // 从不可变内存表读取数据
     if (immutable_memtable_) {
         for (const auto& [key, value] : *immutable_memtable_) {
             all_data[key] = value;
         }
     }
+
+    // 从可变内存表读取数据
     for (const auto& [key, value] : data_) {
         all_data[key] = value;
     }
 
-    std::vector<std::string> keys;
+    // 过滤掉空值
+    std::erase_if(all_data, [](const auto& item) {
+        auto const& [key, value] = item;
+        return value.empty();
+    });
+
+    return all_data;
+}
+std::vector<std::string> Database::keys() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> all_keys;
+    std::map<std::string, std::string> all_data = get_all_data();
     for (const auto& [key, value] : all_data) {
-        if (!value.empty()) {
-            keys.push_back(key);
-        }
+        all_keys.emplace_back(std::move(key));
     }
-    return keys;
+    return all_keys;
 }
 
 void Database::compact() {
@@ -249,26 +261,7 @@ void Database::compact() {
         return;
     }
 
-    std::map<std::string, std::string> all_data;
-    for (const auto& sstable : std::ranges::reverse_view(sstables_)) {
-        auto sstable_data = sstable->readAll();
-        for (const auto& [key, value] : sstable_data) {
-            all_data[key] = value;
-        }
-    }
-    if (immutable_memtable_) {
-        for (const auto& [key, value] : *immutable_memtable_) {
-            all_data[key] = value;
-        }
-    }
-    for (const auto& [key, value] : data_) {
-        all_data[key] = value;
-    }
-
-    std::erase_if(all_data, [](const auto& item) {
-        auto const& [key, value] = item;
-        return value.empty();
-    });
+    std::map<std::string, std::string> all_data = get_all_data();
 
     std::string new_sstable_path =
         (std::filesystem::path(sstables_path_) /
@@ -303,6 +296,42 @@ void Database::compact() {
 void Database::setMemtableFlushThreshold(std::size_t threshold) {
     std::lock_guard<std::mutex> lock(mutex_);
     memtable_flush_threshold_ = threshold;
+}
+
+void Database::printWALRecords() const {
+    auto records = wal_->getFormattedContent();
+    if (records) {
+        std::cout << "--- WAL Records ---" << std::endl;
+        for (const auto& record : *records) {
+            std::cout << record << std::endl;
+        }
+    } else {
+        std::cerr << "获取WAL记录失败: " << records.error() << std::endl;
+    }
+}
+
+void Database::printSSTables() const {
+    std::cout << "--- SSTables Content ---" << std::endl;
+    for (const auto& sstable : sstables_) {
+        std::cout << "SSTable: " << sstable->getPath() << std::endl;
+        auto all_data = sstable->readAll();
+        for (const auto& [key, value] : all_data) {
+            std::cout << "  " << key << ": " << value << std::endl;
+        }
+    }
+}
+
+void Database::printManifest() const {
+    std::cout << "--- Manifest Content ---" << std::endl;
+    std::cout << "Last WAL Sequence Number: " << manifest_data_.last_wal_sequence_number
+              << std::endl;
+    std::cout << "SSTables:" << std::endl;
+    for (const auto& [level, files] : manifest_data_.sstables) {
+        std::cout << "  Level " << level << ":" << std::endl;
+        for (const auto& file : files) {
+            std::cout << "    " << file << std::endl;
+        }
+    }
 }
 
 }  // namespace kvdb::core
