@@ -4,8 +4,7 @@ import kvdb.logging.log;
 namespace kvdb::logging {
 
 // 工厂函数实现
-std::expected<std::shared_ptr<FileSink>, std::string> FileSink::create(
-    std::string_view filePath) {
+std::expected<std::shared_ptr<FileSink>, std::string> FileSink::create(std::string_view filePath) {
     // 使用 new FileSink(filePath) 因为构造函数是私有的
     auto sink = std::shared_ptr<FileSink>(new FileSink(filePath));
     if (sink->open()) {
@@ -34,10 +33,9 @@ bool FileSink::log(const logging::LogRecord& record) {
     if (fileStream_) {
         fileStream_ << record.toString() << '\n';
         return true;
-    } else {
-        LOG_ERROR()("日志文件流未打开: {}", filePath_);
-        return false;
     }
+    LOG_ERROR()("日志文件流未打开: {}", filePath_);
+    return false;
 }
 // 刷新文件流
 bool FileSink::flush() {
@@ -45,10 +43,8 @@ bool FileSink::flush() {
     if (fileStream_) {
         fileStream_.flush();
         return true;
-    } else {
-        LOG_ERROR()("日志文件流未打开: {}", filePath_);
-        return false;
     }
+    LOG_ERROR()("日志文件流未打开: {}", filePath_);
+    return false;
 }
 }  // namespace kvdb::logging
-

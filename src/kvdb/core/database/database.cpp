@@ -4,8 +4,7 @@ import std;
 import kvdb.logging.log;
 import kvdb.storage;
 
-using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
-    kvdb::logging::LOG_WARNING;
+using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO;
 
 namespace kvdb::core {
 
@@ -214,6 +213,7 @@ std::vector<std::string> Database::keys() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<std::string> all_keys;
     std::map<std::string, std::string> all_data = get_all_data();
+    all_keys.reserve(all_data.size());
     for (const auto& [key, value] : all_data) {
         all_keys.push_back(key);
     }
@@ -239,6 +239,7 @@ void Database::compact() {
         LOG_INFO()("压缩成功。新的SSTable: {}", new_sstable_path);
 
         std::vector<std::string> old_paths;
+        old_paths.reserve(sstables_.size());
         for (const auto& sstable : sstables_) {
             old_paths.push_back(sstable->getPath());
         }

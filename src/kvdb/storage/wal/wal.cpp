@@ -2,7 +2,7 @@ module kvdb.storage.wal;
 
 import std;
 import kvdb.logging.log;
-using kvdb::logging::LOG_ERROR, kvdb::logging::LOG_DEBUG;
+using kvdb::logging::LOG_ERROR;
 namespace kvdb::storage {
 
 // 构造函数
@@ -68,10 +68,6 @@ bool Wal::sync() {
     }
 
     file_.flush();
-
-    // 在Linux系统上，可以使用fsync系统调用确保数据写入磁盘
-    // 但C++标准库没有直接提供这个功能，所以这里使用flush作为替代
-    // 实际产品中应考虑使用平台特定的fsync方法
 
     return !file_.fail();
 }
@@ -162,9 +158,9 @@ std::expected<std::unique_ptr<WalRecord>, std::string> Wal::readNextRecord() {
     }
 
     // 1. 读取记录的总长度 (4字节)
-    std::uint32_t total_size;
+    std::uint32_t total_size = 0;
     file_.read(reinterpret_cast<char*>(&total_size), sizeof(total_size));
-    if (file_.gcount() == 0) { // 正常到达文件末尾
+    if (file_.gcount() == 0) {  // 正常到达文件末尾
         return std::unexpected("到达WAL文件末尾");
     }
     if (!file_ || file_.gcount() != sizeof(total_size)) {
@@ -173,14 +169,15 @@ std::expected<std::unique_ptr<WalRecord>, std::string> Wal::readNextRecord() {
 
     // 2. 读取记录的剩余部分
     // total_size 包含了长度本身的4个字节，所以剩余部分是 total_size - 4
-    if (total_size < sizeof(total_size)) { // 防止下溢
+    if (total_size < sizeof(total_size)) {  // 防止下溢
         return std::unexpected("无效的WAL记录长度");
     }
     std::vector<std::uint8_t> record_data(total_size);
     // 将已经读取的长度信息写回向量的开头
     std::memcpy(record_data.data(), &total_size, sizeof(total_size));
 
-    file_.read(reinterpret_cast<char*>(record_data.data() + sizeof(total_size)), total_size - sizeof(total_size));
+    file_.read(reinterpret_cast<char*>(record_data.data() + sizeof(total_size)),
+               total_size - sizeof(total_size));
     if (!file_ || file_.gcount() != (total_size - sizeof(total_size))) {
         return std::unexpected("读取WAL记录数据失败，文件可能已损坏");
     }

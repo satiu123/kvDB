@@ -64,7 +64,7 @@ void process_command(kvdb::core::Database& db, const std::string& line) {
         return;
     }
 
-    std::string command = args[0];
+    const std::string& command = args[0];
 
     if (command == "put" && args.size() == 3) {
         if (db.put(args[1], args[2])) {

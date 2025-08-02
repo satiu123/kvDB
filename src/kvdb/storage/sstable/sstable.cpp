@@ -5,7 +5,7 @@ import kvdb.logging.log;
 
 import kvdb.core.binary;
 
-using kvdb::logging::LOG_INFO, kvdb::logging::LOG_ERROR;
+using kvdb::logging::LOG_INFO;
 namespace kvdb::storage {
 
 SSTable::Builder::Builder(std::string_view path, std::size_t block_size_threshold)
@@ -105,7 +105,7 @@ bool SSTable::loadIndex() {
     // 读取索引块
     file_.seekg(footer_.index_block_offset);
     std::string index_data(footer_.index_block_size, '\0');
-    file_.read(&index_data[0], footer_.index_block_size);
+    file_.read(index_data.data(), footer_.index_block_size);
     // 解析索引数据
     std::istringstream index_stream(index_data);
     while (index_stream.peek() != std::ios::traits_type::eof()) {
@@ -130,7 +130,8 @@ std::optional<std::string> SSTable::find(std::string_view key) {
 
     file_.seekg(it->second);
     // 这是一个简化实现。真正的实现会读取整个块。
-    std::string file_key, file_value;
+    std::string file_key;
+    std::string file_value;
     while (true) {
         auto key_res = kvdb::core::binary::read_string(file_);
         if (!key_res)
@@ -154,7 +155,8 @@ std::map<std::string, std::string> SSTable::readAll() {
     std::map<std::string, std::string> data;
     file_.clear();  // 重置流状态（例如，来自先前读取的EOF）
     file_.seekg(0);
-    std::string key, value;
+    std::string key;
+    std::string value;
     while (static_cast<std::uint64_t>(file_.tellg()) < footer_.index_block_offset) {
         auto key_res = kvdb::core::binary::read_string(file_);
         if (!key_res)

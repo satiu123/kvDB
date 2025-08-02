@@ -17,7 +17,7 @@ class SSTable {
   public:
     class Builder {
       public:
-        Builder(std::string_view path, std::size_t block_size_threshold = 4096);
+        explicit Builder(std::string_view path, std::size_t block_size_threshold = 4096);
 
         void add(std::string_view key, std::string_view value);
         bool finish();

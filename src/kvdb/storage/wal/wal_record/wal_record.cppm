@@ -20,7 +20,8 @@ enum class WalOpType : std::uint8_t {
 class WalRecord {
   public:
     // 构造函数
-    WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "", std::uint64_t sequence_number = 0);
+    explicit WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "",
+                       std::uint64_t sequence_number = 0);
 
     // 从二进制数据反序列化一条记录
     static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(

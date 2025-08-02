@@ -171,17 +171,9 @@ std::string ManifestFile::get_new_manifest_filename() {
     for (const auto& entry : std::filesystem::directory_iterator(path_)) {
         if (entry.is_regular_file()) {
             std::string filename = entry.path().filename().string();
-            if (filename.rfind("MANIFEST-", 0) == 0) {
-                try {
-                    int num = std::stoi(filename.substr(9));
-                    if (num > max_num) {
-                        max_num = num;
-                    }
-                } catch (const std::invalid_argument&) {
-                    // 忽略无法解析的文件名
-                } catch (const std::out_of_range&) {
-                    // 忽略无法解析的文件名
-                }
+            if (filename.starts_with("MANIFEST-")) {
+                int num = std::stoi(filename.substr(9));
+                max_num = std::max(num, max_num);
             }
         }
     }

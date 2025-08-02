@@ -8,7 +8,7 @@ namespace kvdb::logging {
 
 class LOG_BASE {
   public:
-    LOG_BASE(std::source_location loc = std::source_location::current()) : loc_(loc) {}
+    explicit LOG_BASE(std::source_location loc = std::source_location::current()) : loc_(loc) {}
     template <typename... Args>
     void operator()(this auto&& self, const std::format_string<Args...>& fmt, Args&&... args) {
         if (!Logger::getInstance().isEnabled() or !Logger::getInstance().shouldLog(self.LEVEL)) {
@@ -24,25 +24,29 @@ class LOG_BASE {
 class LogDebugImpl : public LOG_BASE {
   public:
     static constexpr LogLevel LEVEL = LogLevel::DEBUG;
-    LogDebugImpl(std::source_location loc = std::source_location::current()) : LOG_BASE(loc) {}
+    explicit LogDebugImpl(std::source_location loc = std::source_location::current())
+        : LOG_BASE(loc) {}
 };
 
 class LogInfoImpl : public LOG_BASE {
   public:
     static constexpr LogLevel LEVEL = LogLevel::INFO;
-    LogInfoImpl(std::source_location loc = std::source_location::current()) : LOG_BASE(loc) {}
+    explicit LogInfoImpl(std::source_location loc = std::source_location::current())
+        : LOG_BASE(loc) {}
 };
 
 class LogWarningImpl : public LOG_BASE {
   public:
     static constexpr LogLevel LEVEL = LogLevel::WARNING;
-    LogWarningImpl(std::source_location loc = std::source_location::current()) : LOG_BASE(loc) {}
+    explicit LogWarningImpl(std::source_location loc = std::source_location::current())
+        : LOG_BASE(loc) {}
 };
 
 class LogErrorImpl : public LOG_BASE {
   public:
     static constexpr LogLevel LEVEL = LogLevel::ERROR;
-    LogErrorImpl(std::source_location loc = std::source_location::current()) : LOG_BASE(loc) {}
+    explicit LogErrorImpl(std::source_location loc = std::source_location::current())
+        : LOG_BASE(loc) {}
 };
 
 }  // namespace kvdb::logging
