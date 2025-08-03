@@ -95,13 +95,13 @@ bool Database::put(std::string_view key, std::string_view value) {
 }
 
 std::optional<std::string> Database::get_locked(std::string_view key) const {
-    auto it = data_.find(std::string(key));
+    auto it = data_.find(key);
     if (it != data_.end()) {
         return it->second.empty() ? std::nullopt : std::optional(it->second);
     }
 
     if (immutable_memtable_) {
-        auto im_it = immutable_memtable_->find(std::string(key));
+        auto im_it = immutable_memtable_->find(key);
         if (im_it != immutable_memtable_->end()) {
             return im_it->second.empty() ? std::nullopt : std::optional(im_it->second);
         }
@@ -178,8 +178,8 @@ bool Database::exists(std::string_view key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     return get_locked(key).has_value();
 }
-std::map<std::string, std::string> Database::get_all_data() const {
-    std::map<std::string, std::string> all_data;
+std::map<std::string, std::string, std::less<>> Database::get_all_data() const {
+    std::map<std::string, std::string, std::less<>> all_data;
 
     // 从SSTables读取数据
     for (const auto& sstable : std::ranges::reverse_view(sstables_)) {
@@ -212,7 +212,7 @@ std::map<std::string, std::string> Database::get_all_data() const {
 std::vector<std::string> Database::keys() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<std::string> all_keys;
-    std::map<std::string, std::string> all_data = get_all_data();
+    std::map<std::string, std::string, std::less<>> all_data = get_all_data();
     all_keys.reserve(all_data.size());
     for (const auto& [key, value] : all_data) {
         all_keys.push_back(key);
@@ -229,7 +229,7 @@ void Database::compact() {
         return;
     }
 
-    std::map<std::string, std::string> all_data = get_all_data();
+    std::map<std::string, std::string, std::less<>> all_data = get_all_data();
 
     std::string new_sstable_path =
         (std::filesystem::path(sstables_path_) /
@@ -307,7 +307,7 @@ void Database::flushMemtableIfNeeded() {
     if (data_.size() >= memtable_flush_threshold_) {
         LOG_INFO()("内存表已满。正在冻结并创建新的内存表。");
         immutable_memtable_ =
-            std::make_unique<std::map<std::string, std::string>>(std::move(data_));
+            std::make_unique<std::map<std::string, std::string, std::less<>>>(std::move(data_));
         data_.clear();
 
         std::string sstable_filename = "sstable_" + std::to_string(sstable_counter_++) + ".db";

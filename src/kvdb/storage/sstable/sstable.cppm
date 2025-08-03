@@ -24,7 +24,7 @@ class SSTable {
         explicit Builder(std::string_view path, std::size_t block_size_threshold = 4096);
 
         void add(std::string_view key, std::string_view value);
-        bool finish(const std::map<std::string, std::string>& data);
+        bool finish(const std::map<std::string, std::string, std::less<>>& data);
 
       private:
         void writeBlock();
@@ -45,7 +45,7 @@ class SSTable {
     };
 
     // 从map构建SSTable的静态函数
-    static bool buildFrom(std::string_view path, const std::map<std::string, std::string>& data);
+    static bool buildFrom(std::string_view path, const std::map<std::string, std::string, std::less<>>& data);
 
     // 用于读取的成员函数
     bool open(std::string_view path);

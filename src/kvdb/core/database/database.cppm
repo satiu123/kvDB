@@ -39,12 +39,12 @@ class Database {
   private:
     void recover();
     void flushMemtableIfNeeded();
-    std::map<std::string, std::string> get_all_data() const;
+    std::map<std::string, std::string, std::less<>> get_all_data() const;
     std::optional<std::string> get_locked(std::string_view key) const;
 
     std::string sstables_path_;
-    std::map<std::string, std::string> data_;                                 // 可变 MemTable
-    std::unique_ptr<std::map<std::string, std::string>> immutable_memtable_;  // 不可变 MemTable
+    std::map<std::string, std::string, std::less<>> data_;                                 // 可变 MemTable
+    std::unique_ptr<std::map<std::string, std::string, std::less<>>> immutable_memtable_;  // 不可变 MemTable
     mutable std::mutex mutex_;
 
     std::unique_ptr<storage::Wal> wal_;                        // WAL实例

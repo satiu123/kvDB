@@ -5,6 +5,7 @@ import kvdb.logging.log;
 
 import kvdb.core.binary;
 import kvdb.storage.bloom_filter;
+import kvdb.core.cache;
 
 using kvdb::logging::LOG_INFO;
 namespace kvdb::storage {
@@ -46,7 +47,7 @@ void SSTable::Builder::writeBlock() {
     current_block_data_.clear();
 }
 
-bool SSTable::Builder::finish(const std::map<std::string, std::string>& data) {
+bool SSTable::Builder::finish(const std::map<std::string, std::string, std::less<>>& data) {
     if (!file_.is_open())
         return false;
 
@@ -87,7 +88,8 @@ bool SSTable::Builder::finish(const std::map<std::string, std::string>& data) {
     return true;
 }
 
-bool SSTable::buildFrom(std::string_view path, const std::map<std::string, std::string>& data) {
+bool SSTable::buildFrom(std::string_view path,
+                        const std::map<std::string, std::string, std::less<>>& data) {
     if (data.empty()) {
         return false;
     }
@@ -169,28 +171,40 @@ std::optional<std::string> SSTable::find(std::string_view key) {
         return std::nullopt;
     }
 
-    // 一次性读取整个数据块
-    std::string block_data(it->size, '\0');
-    file_.seekg(it->offset);
-    file_.read(block_data.data(), it->size);
+    // 1. 尝试从缓存获取已解析的块
+    auto cached_block = kvdb::core::g_block_cache.get(path_, it->offset);
+    kvdb::core::ParsedBlock block_map_ptr;
 
-    // 在内存中解析块
-    std::istringstream block_stream(block_data);
-    while (block_stream.peek() != std::ios::traits_type::eof()) {
-        auto key_res = kvdb::core::binary::read_string(block_stream);
-        if (!key_res)
-            break;
-        auto value_res = kvdb::core::binary::read_string(block_stream);
-        if (!value_res)
-            break;
+    if (cached_block) {
+        // 缓存命中，直接使用已解析的map
+        block_map_ptr = *cached_block;
+    } else {
+        // 缓存未命中
+        // 2. 从磁盘读取原始数据块
+        std::string block_data(it->size, '\0');
+        file_.seekg(it->offset);
+        file_.read(block_data.data(), it->size);
 
-        if (*key_res == key) {
-            return *value_res;
+        // 3. 解析块并创建一个新的map
+        auto new_block_map = std::make_shared<std::map<std::string, std::string, std::less<>>>();
+        std::istringstream block_stream(block_data);
+        while (block_stream.peek() != std::ios::traits_type::eof()) {
+            auto key_res = kvdb::core::binary::read_string(block_stream);
+            if (!key_res) break;
+            auto value_res = kvdb::core::binary::read_string(block_stream);
+            if (!value_res) break;
+            (*new_block_map)[std::move(*key_res)] = std::move(*value_res);
         }
-        // 如果当前块中的键已经大于目标键，说明目标键不存在
-        if (*key_res > key) {
-            return std::nullopt;
-        }
+        
+        // 4. 将新解析的块放入缓存
+        kvdb::core::g_block_cache.put(path_, it->offset, new_block_map);
+        block_map_ptr = new_block_map;
+    }
+
+    // 5. 在已解析的map中进行最终查找
+    auto map_it = block_map_ptr->find(key);
+    if (map_it != block_map_ptr->end()) {
+        return map_it->second;
     }
 
     return std::nullopt;
