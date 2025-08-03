@@ -38,7 +38,8 @@ void SSTable::Builder::writeBlock() {
     if (current_block_data_.empty())
         return;
 
-    index_.emplace_back(last_key_in_block_, offset_);
+    // 记录索引，包含块大小
+    index_.emplace_back(last_key_in_block_, offset_, current_block_data_.size());
 
     file_.write(current_block_data_.data(), current_block_data_.size());
     offset_ += current_block_data_.size();
@@ -56,9 +57,10 @@ bool SSTable::Builder::finish(const std::map<std::string, std::string>& data) {
 
     // 写入索引块
     std::uint64_t index_block_offset = offset_;
-    for (const auto& [key, block_offset] : index_) {
-        kvdb::core::binary::write_string(file_, key);
-        kvdb::core::binary::write_uint64(file_, block_offset);
+    for (const auto& record : index_) {
+        kvdb::core::binary::write_string(file_, record.last_key);
+        kvdb::core::binary::write_uint64(file_, record.offset);
+        kvdb::core::binary::write_uint64(file_, record.size);
     }
     std::uint64_t index_block_size = static_cast<std::uint64_t>(file_.tellp()) - index_block_offset;
 
@@ -111,6 +113,9 @@ bool SSTable::open(std::string_view path) {
 }
 
 bool SSTable::loadBloomFilter() {
+    if (footer_.bloom_filter_size == 0) {  // Handle case where there's no bloom filter
+        return true;
+    }
     file_.seekg(footer_.bloom_filter_offset);
     auto bloom_filter = BloomFilter::deserialize(file_);
     if (!bloom_filter) {
@@ -132,6 +137,7 @@ bool SSTable::loadIndex() {
     file_.seekg(footer_.index_block_offset);
     std::string index_data(footer_.index_block_size, '\0');
     file_.read(index_data.data(), footer_.index_block_size);
+
     // 解析索引数据
     std::istringstream index_stream(index_data);
     while (index_stream.peek() != std::ios::traits_type::eof()) {
@@ -141,8 +147,11 @@ bool SSTable::loadIndex() {
         auto offset_res = kvdb::core::binary::read_uint64(index_stream);
         if (!offset_res)
             break;
+        auto size_res = kvdb::core::binary::read_uint64(index_stream);
+        if (!size_res)
+            break;
 
-        index_.emplace_back(*key_res, *offset_res);
+        index_.emplace_back(*key_res, *offset_res, *size_res);
     }
     return true;
 }
@@ -152,29 +161,35 @@ std::optional<std::string> SSTable::find(std::string_view key) {
         return std::nullopt;
     }
 
-    auto it = std::lower_bound(index_.begin(), index_.end(), key,
-                               [](const auto& a, std::string_view b) { return a.first < b; });
+    auto it = std::lower_bound(
+        index_.begin(), index_.end(), key,
+        [](const auto& record, std::string_view k) { return record.last_key < k; });
+
     if (it == index_.end()) {
         return std::nullopt;
     }
 
-    file_.seekg(it->second);
-    // 这是一个简化实现。真正的实现会读取整个块。
-    std::string file_key;
-    std::string file_value;
-    while (true) {
-        auto key_res = kvdb::core::binary::read_string(file_);
+    // 一次性读取整个数据块
+    std::string block_data(it->size, '\0');
+    file_.seekg(it->offset);
+    file_.read(block_data.data(), it->size);
+
+    // 在内存中解析块
+    std::istringstream block_stream(block_data);
+    while (block_stream.peek() != std::ios::traits_type::eof()) {
+        auto key_res = kvdb::core::binary::read_string(block_stream);
         if (!key_res)
             break;
-        auto value_res = kvdb::core::binary::read_string(file_);
+        auto value_res = kvdb::core::binary::read_string(block_stream);
         if (!value_res)
             break;
 
         if (*key_res == key) {
             return *value_res;
         }
-        if (static_cast<std::uint64_t>(file_.tellg()) >= it->second + 4096) {  // 块大小
-            break;
+        // 如果当前块中的键已经大于目标键，说明目标键不存在
+        if (*key_res > key) {
+            return std::nullopt;
         }
     }
 

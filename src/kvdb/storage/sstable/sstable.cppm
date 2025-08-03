@@ -34,7 +34,12 @@ class SSTable {
         std::size_t block_size_threshold_;
 
         std::string current_block_data_;
-        std::vector<std::pair<std::string, std::uint64_t>> index_;
+        struct IndexRecord {
+            std::string last_key;
+            std::uint64_t offset;
+            std::uint64_t size;
+        };
+        std::vector<IndexRecord> index_;
         std::uint64_t offset_ = 0;
         std::string last_key_in_block_;
     };
@@ -51,13 +56,18 @@ class SSTable {
     }
 
   private:
+    struct IndexRecord {
+        std::string last_key;
+        std::uint64_t offset;
+        std::uint64_t size;
+    };
     bool loadIndex();
     bool loadBloomFilter();
 
     std::ifstream file_;
     std::string path_;
     Footer footer_;
-    std::vector<std::pair<std::string, std::uint64_t>> index_;
+    std::vector<IndexRecord> index_;
     std::unique_ptr<BloomFilter> bloom_filter_;
 };
 
