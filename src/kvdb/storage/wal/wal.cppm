@@ -75,7 +75,7 @@ class Wal {
      * @brief 检查WAL文件是否为空
      * @return 是否为空
      */
-    bool isEmpty() const;
+    bool isEmpty();
 
     /**
      * @brief 关闭WAL文件
@@ -85,7 +85,7 @@ class Wal {
      * @brief 获取格式化的WAL内容
      * @return 格式化的WAL内容字符串数组
      */
-    std::expected<std::vector<std::string>, std::string> getFormattedContent() const;
+    std::expected<std::vector<std::string>, std::string> getFormattedContent();
 
     /**
      * @brief 获取最后的序列号
@@ -100,11 +100,22 @@ class Wal {
     void setCurrentSequenceNumber(std::uint64_t seq);
 
   private:
-    std::string path_;                            // WAL文件路径
-    std::fstream file_;                           // WAL文件流
-    mutable std::mutex mutex_;                    // 互斥锁，用于保护并发访问
-    bool is_open_ = false;                        // WAL文件是否打开
+    std::string path_;                               // WAL文件路径
+    std::fstream file_;                              // WAL文件流
+    mutable std::mutex mutex_;                       // 互斥锁，用于保护并发访问
+    bool is_open_ = false;                           // WAL文件是否打开
     std::atomic<std::uint64_t> sequence_number_{0};  // 序列号，用于记录操作顺序
+
+    // 后台同步相关
+    std::jthread sync_thread_;
+    std::condition_variable cv_;
+    std::mutex sync_mutex_;
+    std::atomic<bool> stop_sync_ = false;
+    std::atomic<bool> has_new_data_ = false;
+
+    void syncLoop();
+    bool isEmpty_locked();
+    void sync_locked();
     /**
      * @brief 打开WAL文件
      * @param truncate 是否截断文件

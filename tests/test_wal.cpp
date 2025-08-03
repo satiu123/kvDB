@@ -11,7 +11,7 @@ namespace {
 // WAL测试类
 class WalTest : public ::testing::Test {
   protected:
-    const std::string test_file = "test_wal.log";
+    const std::string test_file = "test.wal";
 
     // 在每个测试前执行
     void SetUp() override {
@@ -248,6 +248,35 @@ TEST_F(WalTest, Persistence) {
 
         // 确认key2已被删除
         ASSERT_FALSE(recovered_data.contains("key2"));
+    }
+}
+
+// 测试在快速创建和销毁Wal对象时，数据是否能被正确持久化
+// 这主要考验后台同步线程的优雅停机（Graceful Shutdown）逻辑
+TEST_F(WalTest, GracefulShutdownTest) {
+    // 在一个独立的块作用域中创建、使用并销毁Wal对象
+    {
+        Wal wal(test_file);
+        ASSERT_TRUE(wal.appendPut("short_lived_key", "short_lived_value"));
+        // wal对象在此处被销毁，析构函数会被调用
+    }
+
+    // 确保文件已创建且非空
+    ASSERT_TRUE(std::filesystem::exists(test_file));
+    ASSERT_GT(std::filesystem::file_size(test_file), 0);
+
+    // 在另一个作用域中重新打开WAL，并验证数据是否存在
+    {
+        Wal wal(test_file);
+        bool record_found = false;
+        wal.replay([&record_found](const WalRecord& record) {
+            if (record.getKey() == "short_lived_key" && record.getValue() == "short_lived_value") {
+                record_found = true;
+            }
+            return true;  // 继续处理
+        });
+
+        ASSERT_TRUE(record_found) << "未能从WAL文件中恢复快速写入的记录";
     }
 }
 

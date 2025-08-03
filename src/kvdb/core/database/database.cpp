@@ -49,6 +49,7 @@ void Database::recover() {
 
     // 3. 重放WAL以恢复内存表
     std::uint64_t last_wal_seq = manifest_data_.last_wal_sequence_number;
+    wal_->setCurrentSequenceNumber(last_wal_seq);
     wal_->replay([this, last_wal_seq](const storage::WalRecord& record) {
         if (record.getSequenceNumber() <= last_wal_seq) {
             return true;  // Skip records that are already reflected in an SSTable
