@@ -2,6 +2,8 @@ export module kvdb.storage.sstable;
 
 import std;
 
+import kvdb.storage.bloom_filter;
+
 export namespace kvdb::storage {
 
 // 用于文件验证的魔数
@@ -10,6 +12,8 @@ constexpr std::uint64_t SSTABLE_MAGIC = 0x4B56444253535441;  // "KVDB_SSTA"
 struct Footer {
     std::uint64_t index_block_offset;
     std::uint64_t index_block_size;
+    std::uint64_t bloom_filter_offset;
+    std::uint64_t bloom_filter_size;
     std::uint64_t magic = SSTABLE_MAGIC;
 };
 
@@ -20,7 +24,7 @@ class SSTable {
         explicit Builder(std::string_view path, std::size_t block_size_threshold = 4096);
 
         void add(std::string_view key, std::string_view value);
-        bool finish();
+        bool finish(const std::map<std::string, std::string>& data);
 
       private:
         void writeBlock();
@@ -48,11 +52,13 @@ class SSTable {
 
   private:
     bool loadIndex();
+    bool loadBloomFilter();
 
     std::ifstream file_;
     std::string path_;
     Footer footer_;
     std::vector<std::pair<std::string, std::uint64_t>> index_;
+    std::unique_ptr<BloomFilter> bloom_filter_;
 };
 
 }  // namespace kvdb::storage

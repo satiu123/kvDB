@@ -4,6 +4,7 @@ import std;
 import kvdb.logging.log;
 
 import kvdb.core.binary;
+import kvdb.storage.bloom_filter;
 
 using kvdb::logging::LOG_INFO;
 namespace kvdb::storage {
@@ -44,7 +45,7 @@ void SSTable::Builder::writeBlock() {
     current_block_data_.clear();
 }
 
-bool SSTable::Builder::finish() {
+bool SSTable::Builder::finish(const std::map<std::string, std::string>& data) {
     if (!file_.is_open())
         return false;
 
@@ -61,10 +62,22 @@ bool SSTable::Builder::finish() {
     }
     std::uint64_t index_block_size = static_cast<std::uint64_t>(file_.tellp()) - index_block_offset;
 
+    // 创建并写入布隆过滤器
+    BloomFilter bloom_filter(data.size(), 0.01);
+    for (const auto& [key, value] : data) {
+        bloom_filter.add(key);
+    }
+    std::uint64_t bloom_filter_offset = file_.tellp();
+    bloom_filter.serialize(file_);
+    std::uint64_t bloom_filter_size =
+        static_cast<std::uint64_t>(file_.tellp()) - bloom_filter_offset;
+
     // 写入尾注
     Footer footer;
     footer.index_block_offset = index_block_offset;
     footer.index_block_size = index_block_size;
+    footer.bloom_filter_offset = bloom_filter_offset;
+    footer.bloom_filter_size = bloom_filter_size;
     file_.write(reinterpret_cast<const char*>(&footer), sizeof(footer));
 
     file_.close();
@@ -82,7 +95,7 @@ bool SSTable::buildFrom(std::string_view path, const std::map<std::string, std::
         builder.add(key, value);
     }
 
-    return builder.finish();
+    return builder.finish(data);
 }
 
 bool SSTable::open(std::string_view path) {
@@ -91,7 +104,20 @@ bool SSTable::open(std::string_view path) {
     if (!file_.is_open()) {
         return false;
     }
-    return loadIndex();
+    if (!loadIndex()) {
+        return false;
+    }
+    return loadBloomFilter();
+}
+
+bool SSTable::loadBloomFilter() {
+    file_.seekg(footer_.bloom_filter_offset);
+    auto bloom_filter = BloomFilter::deserialize(file_);
+    if (!bloom_filter) {
+        return false;
+    }
+    bloom_filter_ = std::make_unique<BloomFilter>(std::move(*bloom_filter));
+    return true;
 }
 
 bool SSTable::loadIndex() {
@@ -122,6 +148,10 @@ bool SSTable::loadIndex() {
 }
 
 std::optional<std::string> SSTable::find(std::string_view key) {
+    if (bloom_filter_ && !bloom_filter_->contains(key)) {
+        return std::nullopt;
+    }
+
     auto it = std::lower_bound(index_.begin(), index_.end(), key,
                                [](const auto& a, std::string_view b) { return a.first < b; });
     if (it == index_.end()) {
