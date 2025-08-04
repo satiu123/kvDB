@@ -6,3 +6,6 @@ target_link_libraries(structure_test kvdb)
 
 add_executable(coro_test coro_test.cpp)
 target_link_libraries(coro_test kvdb)
+
+add_executable(tp_test tp_test.cpp)
+target_link_libraries(tp_test kvdb)

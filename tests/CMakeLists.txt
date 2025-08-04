@@ -23,6 +23,7 @@ add_executable(kvdb_tests
     test_deletion.cpp
     test_manifest.cpp
     test_performance.cpp
+    test_thread_pool.cpp
 )
 
 # 链接到 CMake 目标，GTest 的目标名称由 FetchContent 自动创建

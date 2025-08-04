@@ -190,12 +190,14 @@ std::optional<std::string> SSTable::find(std::string_view key) {
         std::istringstream block_stream(block_data);
         while (block_stream.peek() != std::ios::traits_type::eof()) {
             auto key_res = kvdb::core::binary::read_string(block_stream);
-            if (!key_res) break;
+            if (!key_res)
+                break;
             auto value_res = kvdb::core::binary::read_string(block_stream);
-            if (!value_res) break;
+            if (!value_res)
+                break;
             (*new_block_map)[std::move(*key_res)] = std::move(*value_res);
         }
-        
+
         // 4. 将新解析的块放入缓存
         kvdb::core::g_block_cache.put(path_, it->offset, new_block_map);
         block_map_ptr = new_block_map;

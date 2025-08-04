@@ -54,6 +54,10 @@ class Task {
         return handle_.promise().result();
     }
 
+    bool done() const {
+        return handle_.done();
+    }
+
   private:
     std::coroutine_handle<promise_type> handle_;
 };
@@ -102,6 +106,10 @@ class Task<void> {
 
     void result() {
         handle_.promise().result();
+    }
+
+    bool done() const {
+        return handle_.done();
     }
 
   private:
