@@ -8,7 +8,7 @@ import utils.thread_pool;
 
 // 测试线程池的构造和析构是否正常，不会导致挂起
 TEST(ThreadPoolLifecycle, ConstructionAndDestruction) {
-    ThreadPool pool(4);
+    utils::ThreadPool pool(4);
     SUCCEED();  // 如果能执行到这里，说明构造和析构没有立即出问题
 }  // pool 在此被析构
 
@@ -17,7 +17,7 @@ TEST(ThreadPoolLifecycle, ShutdownWithPendingTasks) {
     std::atomic<int> counter = 0;
     const int num_tasks = 10;
     {
-        ThreadPool pool(4);
+        utils::ThreadPool pool(4);
         for (int i = 0; i < num_tasks; ++i) {
             pool.enqueue([&counter]() {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -35,7 +35,7 @@ TEST(ThreadPoolLifecycle, ShutdownWithPendingTasks) {
 
 // 测试从任务中获取各种类型的返回值
 TEST(ThreadPoolTasks, ReturnValue) {
-    ThreadPool pool(1);
+    utils::ThreadPool pool(1);
     auto future_int = pool.enqueue([] { return 42; });
     auto future_str = pool.enqueue([] { return std::string("hello"); });
 
@@ -45,7 +45,7 @@ TEST(ThreadPoolTasks, ReturnValue) {
 
 // 测试向任务传递不同类型的参数
 TEST(ThreadPoolTasks, TaskWithArguments) {
-    ThreadPool pool(1);
+    utils::ThreadPool pool(1);
     auto future = pool.enqueue(
         [](int a, const std::string& b, std::string&& c) { return std::to_string(a) + b + c; }, 1,
         "-text-", "-move");
@@ -55,7 +55,7 @@ TEST(ThreadPoolTasks, TaskWithArguments) {
 
 // 测试向任务传递仅移动(move-only)类型的参数
 TEST(ThreadPoolTasks, TaskWithMoveOnlyArgument) {
-    ThreadPool pool(1);
+    utils::ThreadPool pool(1);
     auto ptr = std::make_unique<int>(123);
 
     auto future = pool.enqueue([](std::unique_ptr<int> p) { return *p; }, std::move(ptr));
@@ -67,7 +67,7 @@ TEST(ThreadPoolTasks, TaskWithMoveOnlyArgument) {
 
 // 测试当任务抛出异常时，future.get() 会重新抛出该异常
 TEST(ThreadPoolTasks, TaskThrowsException) {
-    ThreadPool pool(1);
+    utils::ThreadPool pool(1);
     auto future = pool.enqueue([]() { throw std::runtime_error("Task failed"); });
 
     // 验证 future.get() 会抛出我们预期的异常
@@ -87,7 +87,7 @@ TEST(ThreadPoolTasks, TaskThrowsException) {
 
 // 从多个线程并发地向线程池提交任务
 TEST(ThreadPoolConcurrency, ConcurrentEnqueue) {
-    ThreadPool pool(8);
+    utils::ThreadPool pool(8);
     std::atomic<int> counter = 0;
     const int num_threads = 4;
     const int tasks_per_thread = 50;
@@ -119,7 +119,7 @@ TEST(ThreadPoolConcurrency, ConcurrentEnqueue) {
 TEST(ThreadPoolEdgeCases, ZeroThreads) {
     std::atomic<bool> task_executed = false;
     {
-        ThreadPool pool(0);
+        utils::ThreadPool pool(0);
         auto future = pool.enqueue([&task_executed] { task_executed = true; });
 
         // 任务不应该被执行，因为没有工作线程

@@ -1,8 +1,8 @@
 export module utils.thread_pool;
 
 import std;
-
-export class ThreadPool {
+export namespace utils {
+class ThreadPool {
   public:
     /**
      * @brief 构造函数
@@ -118,3 +118,4 @@ export class ThreadPool {
     std::condition_variable_any condition;
     // 不再需要自己的 stop_source，因为 jthread 会管理自己的停止状态
 };
+}  // namespace utils

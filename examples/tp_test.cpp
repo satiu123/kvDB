@@ -2,7 +2,7 @@ import std;
 import utils.thread_pool;
 int main() {
     // 创建一个线程池
-    ThreadPool pool(4);
+    utils::ThreadPool pool(4);
 
     // 提交任务
     auto future1 = pool.enqueue([] {

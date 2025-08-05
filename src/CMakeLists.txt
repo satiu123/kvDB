@@ -27,10 +27,16 @@ set_target_properties(kvdb PROPERTIES
     CXX_SCAN_FOR_MODULES ON
 )
 
+# 查找 pkg-config 工具
+find_package(PkgConfig REQUIRED)
 
+# 使用 pkg-config 查找 liburing
+# 这会创建一个导入的目标 PkgConfig::liburing
+pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
 target_link_libraries(kvdb
     PRIVATE
         std-cxx-modules
+        ${LIBURING_LIBRARIES}
 )
 
 install(TARGETS kvdb
