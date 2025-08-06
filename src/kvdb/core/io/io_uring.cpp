@@ -6,6 +6,7 @@ module;
 module IOUring;
 
 import std;
+import kvdb.core.coro.awaiter.io_awaiter;
 
 // IOUring类的构造函数
 // 初始化io_uring实例
@@ -33,7 +34,47 @@ IOUring::~IOUring() {
 }
 
 // 提交读请求
-void IOUring::submit_read(int fd, std::span<std::byte> buffer, std::uint64_t offset, std::uint64_t user_data) {
+auto IOUring::submit_read(int fd, std::span<std::byte> buffer,
+                          std::uint64_t offset) -> ReadAwaiter {
+    return ReadAwaiter{this, fd, buffer, offset};
+}
+
+// 提交写请求
+auto IOUring::submit_write(int fd, std::span<const std::byte> buffer,
+                           std::uint64_t offset) -> WriteAwaiter {
+    return WriteAwaiter{this, fd, buffer, offset};
+}
+
+// 等待一个IO操作完成
+void IOUring::wait_for_completion() {
+    // 提交所有待处理的请求
+    submit_requests();
+
+    io_uring_cqe* cqe;
+    // 等待完成队列中的一个条目(CQE)
+    if (io_uring_wait_cqe(static_cast<io_uring*>(ring_), &cqe) < 0) {
+        throw std::runtime_error("Failed to wait for completion queue entry");
+    }
+
+    // 从CQE中提取结果和用户数据
+    auto user_data =
+        reinterpret_cast<std::uint64_t>(io_uring_cqe_get_data(cqe));
+    auto result = cqe->res;
+
+    // 标记CQE为已处理
+    io_uring_cqe_seen(static_cast<io_uring*>(ring_), cqe);
+
+    // 恢复协程
+    // 这是一个简化的假设，实际场景中需要一种方式来区分awaiter类型
+    auto* awaiter = reinterpret_cast<ReadAwaiter*>(user_data);
+    if (awaiter) {
+        awaiter->set_result(result);
+        awaiter->get_handle().resume();
+    }
+}
+
+void IOUring::submit_read_request(int fd, std::span<std::byte> buffer, std::uint64_t offset,
+                                  std::uint64_t user_data) {
     // 从io_uring获取一个提交队列条目(SQE)
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
     if (!sqe) {
@@ -50,8 +91,8 @@ void IOUring::submit_read(int fd, std::span<std::byte> buffer, std::uint64_t off
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
 }
 
-// 提交写请求
-void IOUring::submit_write(int fd, std::span<const std::byte> buffer, std::uint64_t offset, std::uint64_t user_data) {
+void IOUring::submit_write_request(int fd, std::span<const std::byte> buffer, std::uint64_t offset,
+                                   std::uint64_t user_data) {
     // 从io_uring获取一个提交队列条目(SQE)
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
     if (!sqe) {
@@ -64,31 +105,8 @@ void IOUring::submit_write(int fd, std::span<const std::byte> buffer, std::uint6
     }
     // 准备写操作的SQE
     io_uring_prep_write(sqe, fd, buffer.data(), buffer.size(), offset);
-    // 设置用户数据
+    // 设置用户数据，用于在完成时识别操作
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
-}
-
-// 等待一个IO操作完成
-auto IOUring::wait_for_completion() -> CompletionResult {
-    // 提交所有待处理的请求
-    submit_requests();
-
-    io_uring_cqe* cqe;
-    // 等待完成队列中的一个条目(CQE)
-    if (io_uring_wait_cqe(static_cast<io_uring*>(ring_), &cqe) < 0) {
-        throw std::runtime_error("Failed to wait for completion queue entry");
-    }
-
-    // 从CQE中提取结果和用户数据
-    CompletionResult result{
-        .result = cqe->res,
-        .user_data = reinterpret_cast<std::uint64_t>(io_uring_cqe_get_data(cqe))
-    };
-
-    // 标记CQE为已处理
-    io_uring_cqe_seen(static_cast<io_uring*>(ring_), cqe);
-
-    return result;
 }
 
 // 提交所有准备好的请求到内核

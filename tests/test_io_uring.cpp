@@ -3,6 +3,7 @@
 import IOUring;
 import File; // 导入我们新的文件模块
 import std;
+import kvdb.core.coro.task;
 
 class IOUringTest : public ::testing::Test {
   protected:
@@ -19,36 +20,36 @@ class IOUringTest : public ::testing::Test {
     const std::string test_filename_ = "io_uring_test_file.tmp";
 };
 
+Task<bool> test_write_and_read(IOUring& ring, const std::string& filename) {
+    File test_file(ring, filename, FileMode::ReadWrite);
+
+    // 写入测试
+    const std::string write_data_str = "你好, C++20 模块!";
+    std::vector<std::byte> write_buffer(write_data_str.size());
+    std::transform(write_data_str.begin(), write_data_str.end(), write_buffer.begin(),
+                   [](char c) { return static_cast<std::byte>(c); });
+
+    co_await test_file.write(write_buffer, 0);
+
+    // 读取测试
+    std::vector<std::byte> read_buffer(write_buffer.size());
+    co_await test_file.read(read_buffer, 0);
+
+    // 验证
+    co_return write_buffer == read_buffer;
+}
+
 TEST_F(IOUringTest, WriteAndRead) {
     try {
-        // 1. 使用File模块创建和管理文件，实现RAII
-        File test_file(test_filename_, FileMode::ReadWrite);
         IOUring ring(8);
+        auto task = test_write_and_read(ring, test_filename_);
+        task.resume();
 
-        // 2. 写入测试
-        const std::string write_data_str = "你好, C++20 模块!";
-        std::vector<std::byte> write_buffer(write_data_str.size());
-        std::transform(write_data_str.begin(), write_data_str.end(), write_buffer.begin(),
-                       [](char c) { return static_cast<std::byte>(c); });
+        while (!task.done()) {
+            ring.wait_for_completion();
+        }
 
-        ring.submit_write(test_file.get_fd(), write_buffer, 0, 1);
-        CompletionResult write_result = ring.wait_for_completion();
-
-        ASSERT_EQ(write_result.user_data, 1);
-        ASSERT_GE(write_result.result, 0);
-        ASSERT_EQ(static_cast<std::size_t>(write_result.result), write_buffer.size());
-
-        // 3. 读取测试
-        std::vector<std::byte> read_buffer(write_buffer.size());
-        ring.submit_read(test_file.get_fd(), read_buffer, 0, 2);
-        CompletionResult read_result = ring.wait_for_completion();
-
-        ASSERT_EQ(read_result.user_data, 2);
-        ASSERT_GE(read_result.result, 0);
-        ASSERT_EQ(static_cast<std::size_t>(read_result.result), read_buffer.size());
-
-        // 4. 验证
-        ASSERT_EQ(write_buffer, read_buffer);
+        ASSERT_TRUE(task.get());
 
     } catch (const std::exception& e) {
         FAIL() << "Test failed with exception: " << e.what();

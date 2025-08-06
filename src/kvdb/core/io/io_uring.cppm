@@ -1,13 +1,7 @@
 export module IOUring;
 
 import std;
-
-// 导出完成事件的结果结构体
-// 调用者可以通过这个结构体获取异步操作的结果
-export struct CompletionResult {
-    std::int32_t result;      // 操作结果，例如读取的字节数或错误码
-    std::uint64_t user_data;  // 与提交请求时关联的用户数据
-};
+import kvdb.core.coro.awaiter.io_awaiter;
 
 // 导出IOUring类，封装io_uring的核心功能
 export class IOUring {
@@ -28,21 +22,25 @@ export class IOUring {
     // fd: 文件描述符
     // buffer: 数据读取的目标缓冲区
     // offset: 文件读取的偏移量
-    // user_data: 与此请求关联的用户自定义数据，会在完成事件中返回
-    void submit_read(int fd, std::span<std::byte> buffer, std::uint64_t offset,
-                     std::uint64_t user_data);
+    [[nodiscard]] auto submit_read(int fd, std::span<std::byte> buffer,
+                                   std::uint64_t offset) -> ReadAwaiter;
 
     // 提交一个写请求到队列
     // fd: 文件描述符
     // buffer: 要写入文件的数据缓冲区
     // offset: 文件写入的偏移量
-    // user_data: 与此请求关联的用户自定义数据，会在完成事件中返回
-    void submit_write(int fd, std::span<const std::byte> buffer, std::uint64_t offset,
-                      std::uint64_t user_data);
+    [[nodiscard]] auto submit_write(int fd, std::span<const std::byte> buffer,
+                                    std::uint64_t offset) -> WriteAwaiter;
 
     // 等待并获取一个完成事件
     // 这个函数会阻塞，直到至少有一个IO操作完成
-    [[nodiscard]] auto wait_for_completion() -> CompletionResult;
+    void wait_for_completion();
+
+    // 供 Awaiter 调用的内部方法
+    void submit_read_request(int fd, std::span<std::byte> buffer, std::uint64_t offset,
+                             std::uint64_t user_data);
+    void submit_write_request(int fd, std::span<const std::byte> buffer, std::uint64_t offset,
+                              std::uint64_t user_data);
 
   private:
     // 实际提交所有准备好的请求到内核
