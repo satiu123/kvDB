@@ -1,7 +1,7 @@
 # src/CMakeLists.txt
 
 # 1. 创建一个库目标
-add_library(kvdb)
+add_library(kvdb SHARED)
 
 # 2. 收集所有模块接口文件 (.cppm)
 file(GLOB_RECURSE KVDB_MODULE_INTERFACES CONFIGURE_DEPENDS
@@ -45,3 +45,5 @@ install(TARGETS kvdb
     RUNTIME DESTINATION bin
     FILE_SET Modules DESTINATION include
 )
+
+# Added io_uring module
