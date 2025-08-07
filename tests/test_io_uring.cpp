@@ -5,6 +5,10 @@ import kvdb.core.io.file;     // 导入我们新的文件模块
 import std;
 import kvdb.core.coro.task;
 
+using kvdb::core::coro::Task;
+using kvdb::core::io::File;
+using kvdb::core::io::FileMode;
+using kvdb::core::io::IOUring;
 class IOUringTest : public ::testing::Test {
   protected:
     void TearDown() override {

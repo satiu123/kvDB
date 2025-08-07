@@ -2,8 +2,10 @@ export module kvdb.core.coro.task;
 
 import std;
 
+export namespace kvdb::core::coro {
+
 // 导出 Task 类，用于 C++20 协程
-export template <typename T>
+template <typename T>
 class [[nodiscard]] Task {
   public:
     // promise_type 结构体
@@ -14,8 +16,20 @@ class [[nodiscard]] Task {
         std::suspend_always initial_suspend() noexcept {
             return {};
         }
-        std::suspend_always final_suspend() noexcept {
-            return {};
+        auto final_suspend() noexcept {
+            struct awaiter {
+                bool await_ready() noexcept { return false; }
+                std::coroutine_handle<>
+                await_suspend(std::coroutine_handle<promise_type> h) noexcept {
+                    auto continuation = h.promise().continuation;
+                    if (continuation) {
+                        return continuation;
+                    }
+                    return std::noop_coroutine();
+                }
+                void await_resume() noexcept {}
+            };
+            return awaiter{};
         }
         void return_value(T value) {
             this->value = std::move(value);
@@ -25,6 +39,7 @@ class [[nodiscard]] Task {
         }
 
         T value;
+        std::coroutine_handle<> continuation = nullptr;
     };
 
     // 构造函数
@@ -51,6 +66,26 @@ class [[nodiscard]] Task {
             handle_ = std::exchange(other.handle_, {});
         }
         return *this;
+    }
+
+    auto operator co_await() noexcept {
+        struct awaiter {
+            std::coroutine_handle<promise_type> handle_;
+
+            bool await_ready() const noexcept {
+                return !handle_ || handle_.done();
+            }
+
+            void await_suspend(std::coroutine_handle<> awaiting_handle) noexcept {
+                handle_.promise().continuation = awaiting_handle;
+                handle_.resume();
+            }
+
+            T await_resume() noexcept {
+                return std::move(handle_.promise().value);
+            }
+        };
+        return awaiter{handle_};
     }
 
     // 获取结果
@@ -76,7 +111,7 @@ class [[nodiscard]] Task {
 };
 
 // Task<void> 的特化
-export template <>
+template <>
 class [[nodiscard]] Task<void> {
   public:
     // promise_type 结构体
@@ -87,13 +122,26 @@ class [[nodiscard]] Task<void> {
         std::suspend_always initial_suspend() noexcept {
             return {};
         }
-        std::suspend_always final_suspend() noexcept {
-            return {};
+        auto final_suspend() noexcept {
+            struct awaiter {
+                bool await_ready() noexcept { return false; }
+                std::coroutine_handle<>
+                await_suspend(std::coroutine_handle<promise_type> h) noexcept {
+                    auto continuation = h.promise().continuation;
+                    if (continuation) {
+                        return continuation;
+                    }
+                    return std::noop_coroutine();
+                }
+                void await_resume() noexcept {}
+            };
+            return awaiter{};
         }
         void return_void() {}
         void unhandled_exception() {
             std::terminate();
         }
+        std::coroutine_handle<> continuation = nullptr;
     };
 
     // 构造函数
@@ -122,6 +170,24 @@ class [[nodiscard]] Task<void> {
         return *this;
     }
 
+    auto operator co_await() noexcept {
+        struct awaiter {
+            std::coroutine_handle<promise_type> handle_;
+
+            bool await_ready() const noexcept {
+                return !handle_ || handle_.done();
+            }
+
+            void await_suspend(std::coroutine_handle<> awaiting_handle) noexcept {
+                handle_.promise().continuation = awaiting_handle;
+                handle_.resume();
+            }
+
+            void await_resume() noexcept {}
+        };
+        return awaiter{handle_};
+    }
+
     // 检查协程是否完成
     bool done() const {
         return !handle_ || handle_.done();
@@ -140,3 +206,4 @@ class [[nodiscard]] Task<void> {
   private:
     std::coroutine_handle<promise_type> handle_;
 };
+}  // namespace kvdb::core::coro

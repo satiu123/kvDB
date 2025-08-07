@@ -13,10 +13,17 @@ import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
 
-// 构造函数实现
-File::File(IOUring& ring, const std::string& path, FileMode mode) : ring_(&ring), path_(path) {
+namespace kvdb::core::io {
+File::File(IOUring& ring, const std::string& path, FileMode mode)
+    : ring_(&ring), path_(path), mode_(mode) {}
+
+void File::open_if_needed() {
+    if (fd_ != -1) {
+        return;
+    }
+
     int flags = 0;
-    switch (mode) {
+    switch (mode_) {
         case FileMode::Read:
             flags = O_RDONLY;
             break;
@@ -28,10 +35,9 @@ File::File(IOUring& ring, const std::string& path, FileMode mode) : ring_(&ring)
             break;
     }
 
-    // S_IRUSR | S_IWUSR 表示用户读写权限
-    fd_ = open(path.c_str(), flags, S_IRUSR | S_IWUSR);
+    fd_ = open(path_.c_str(), flags, S_IRUSR | S_IWUSR);
     if (fd_ == -1) {
-        throw std::system_error(errno, std::generic_category(), "Failed to open file: " + path);
+        throw std::system_error(errno, std::generic_category(), "Failed to open file: " + path_);
     }
 }
 
@@ -44,7 +50,7 @@ File::~File() {
 
 // 移动构造函数实现
 File::File(File&& other) noexcept
-    : ring_(other.ring_), fd_(other.fd_), path_(std::move(other.path_)) {
+    : ring_(other.ring_), fd_(other.fd_), path_(std::move(other.path_)), mode_(other.mode_) {
     other.ring_ = nullptr;
     other.fd_ = -1;  // 将原对象的文件描述符设为无效
 }
@@ -58,6 +64,7 @@ File& File::operator=(File&& other) noexcept {
         ring_ = other.ring_;
         fd_ = other.fd_;
         path_ = std::move(other.path_);
+        mode_ = other.mode_;
         other.ring_ = nullptr;
         other.fd_ = -1;
     }
@@ -66,11 +73,13 @@ File& File::operator=(File&& other) noexcept {
 
 // 异步读取
 ReadAwaiter File::read(std::span<std::byte> buffer, std::uint64_t offset) {
+    open_if_needed();
     return ring_->submit_read(fd_, buffer, offset);
 }
 
 // 异步写入
 WriteAwaiter File::write(std::span<const std::byte> buffer, std::uint64_t offset) {
+    open_if_needed();
     return ring_->submit_write(fd_, buffer, offset);
 }
 
@@ -89,3 +98,4 @@ void File::remove(const std::string& path) {
         }
     }
 }
+}  // namespace kvdb::core::io

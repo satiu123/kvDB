@@ -8,12 +8,11 @@ module kvdb.core.io.io_uring;
 
 import std;
 import kvdb.core.coro.awaiter.io_awaiter;
+namespace kvdb::core::io {
 
 // IOUring类的构造函数
 // 初始化io_uring实例
-IOUring::IOUring(unsigned int queue_depth) {
-    // 分配io_uring实例的内存
-    ring_ = new io_uring;
+IOUring::IOUring(unsigned int queue_depth) : ring_(new io_uring) {
     // 初始化io_uring环
     if (io_uring_queue_init(queue_depth, static_cast<io_uring*>(ring_), 0) < 0) {
         delete static_cast<io_uring*>(ring_);
@@ -116,3 +115,5 @@ void IOUring::submit_requests() {
         throw std::runtime_error("Failed to submit requests to io_uring");
     }
 }
+
+}  // namespace kvdb::core::io

@@ -5,7 +5,7 @@ module;
 module kvdb.core.coro.awaiter.io_awaiter;
 
 import kvdb.core.io.io_uring;
-
+using kvdb::core::io::IOUring;
 void ReadAwaiter::await_suspend(std::coroutine_handle<> handle) noexcept {
     handle_ = handle;
     static_cast<IOUring*>(ring_)->submit_read_request(fd_, buffer_, offset_,

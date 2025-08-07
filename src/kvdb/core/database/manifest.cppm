@@ -3,6 +3,8 @@ export module kvdb.core.database.manifest;
 import std;
 
 import kvdb.core.binary;
+import kvdb.core.coro.task;
+import kvdb.core.io.io_uring;
 
 export namespace kvdb::core::database {
 
@@ -19,11 +21,17 @@ struct Manifest {
 class ManifestFile {
   public:
     explicit ManifestFile(std::string_view path);
+    explicit ManifestFile(kvdb::core::io::IOUring& ring, std::string_view path);
 
-    std::expected<Manifest, std::string> load();
-    std::expected<void, std::string> store(const Manifest& manifest);
+    auto load() -> std::expected<Manifest, std::string>;
+    auto store(const Manifest& manifest) -> std::expected<void, std::string>;
+
+    auto async_load() -> kvdb::core::coro::Task<std::expected<Manifest, std::string>>;
+    auto async_store(const Manifest& manifest)
+        -> kvdb::core::coro::Task<std::expected<void, std::string>>;
 
   private:
+    kvdb::core::io::IOUring* ring_{nullptr};
     std::string path_;
     std::string current_path_;
 

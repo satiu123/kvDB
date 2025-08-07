@@ -2,8 +2,15 @@ module kvdb.core.database.manifest;
 
 import std;
 import kvdb.core.binary;
+import kvdb.core.coro.task;
+import kvdb.core.io.file;
+import kvdb.core.io.io_uring;
 import kvdb.logging.log;
 
+using kvdb::core::coro::Task;
+using kvdb::core::io::File;
+using kvdb::core::io::FileMode;
+using kvdb::core::io::IOUring;
 using kvdb::logging::LOG_ERROR;
 
 namespace kvdb::core::database {
@@ -101,7 +108,10 @@ std::expected<void, std::string> Manifest::deserialize(std::istream& is) {
 ManifestFile::ManifestFile(std::string_view path)
     : path_(path), current_path_(std::string(path) + "/CURRENT") {}
 
-std::expected<Manifest, std::string> ManifestFile::load() {
+ManifestFile::ManifestFile(IOUring& ring, std::string_view path)
+    : ring_(&ring), path_(path), current_path_(std::string(path) + "/CURRENT") {}
+
+auto ManifestFile::load() -> std::expected<Manifest, std::string> {
     std::ifstream current_file(current_path_);
     if (!current_file.is_open()) {
         return Manifest{};  // 首次启动，没有CURRENT文件，是正常情况
@@ -129,7 +139,7 @@ std::expected<Manifest, std::string> ManifestFile::load() {
     return manifest;
 }
 
-std::expected<void, std::string> ManifestFile::store(const Manifest& manifest) {
+auto ManifestFile::store(const Manifest& manifest) -> std::expected<void, std::string> {
     std::string new_manifest_filename = get_new_manifest_filename();
     std::string new_manifest_path = std::string(path_) + "/" + new_manifest_filename;
     std::string temp_path = new_manifest_path + ".tmp";
@@ -163,17 +173,94 @@ std::expected<void, std::string> ManifestFile::store(const Manifest& manifest) {
     return {};
 }
 
-std::string ManifestFile::get_new_manifest_filename() {
-    int max_num = 0;
+auto ManifestFile::async_load() -> kvdb::core::coro::Task<std::expected<Manifest, std::string>> {
+    if (!ring_) {
+        co_return std::unexpected("IOUring not initialized for async_load");
+    }
+    if (!std::filesystem::exists(current_path_)) {
+        co_return Manifest{};
+    }
+    // 1. 异步读取CURRENT文件
+    std::vector<std::byte> current_buffer(128);
+    File current_file(*ring_, current_path_, FileMode::Read);
+    auto read_res = co_await current_file.read(current_buffer, 0);
+
+    if (read_res <= 0) {
+        co_return Manifest{};
+    }
+    std::string manifest_filename(reinterpret_cast<char*>(current_buffer.data()), read_res);
+
+    // 2. 异步读取MANIFEST文件
+    std::string manifest_path = std::string(path_) + "/" + manifest_filename;
+    File manifest_file(*ring_, manifest_path, FileMode::Read);
+    std::vector<std::byte> manifest_buffer(1024 * 1024);  // 1MB buffer
+    read_res = co_await manifest_file.read(manifest_buffer, 0);
+    if (read_res <= 0) {
+        co_return std::unexpected("Failed to read MANIFEST file");
+    }
+    // 3. 反序列化
+    std::string content(reinterpret_cast<char*>(manifest_buffer.data()), read_res);
+    std::stringstream ss(content);
+    Manifest manifest;
+    if (auto res = manifest.deserialize(ss); !res) {
+        co_return std::unexpected("Failed to deserialize MANIFEST: " + res.error());
+    }
+    co_return manifest;
+}
+
+auto ManifestFile::async_store(const Manifest& manifest)
+    -> kvdb::core::coro::Task<std::expected<void, std::string>> {
+    if (!ring_) {
+        co_return std::unexpected("IOUring not initialized for async_store");
+    }
     if (!std::filesystem::exists(path_)) {
         std::filesystem::create_directories(path_);
     }
-    for (const auto& entry : std::filesystem::directory_iterator(path_)) {
-        if (entry.is_regular_file()) {
-            std::string filename = entry.path().filename().string();
-            if (filename.starts_with("MANIFEST-")) {
-                int num = std::stoi(filename.substr(9));
-                max_num = std::max(num, max_num);
+    // 1. 序列化到内存缓冲区
+    std::stringstream ss;
+    if (auto res = manifest.serialize(ss); !res) {
+        co_return std::unexpected("Failed to serialize manifest: " + res.error());
+    }
+    std::string content = ss.str();
+    std::vector<std::byte> buffer(content.size());
+    std::memcpy(buffer.data(), content.data(), content.size());
+
+    // 2. 异步写入临时文件
+    std::string new_manifest_filename = get_new_manifest_filename();
+    std::string new_manifest_path = std::string(path_) + "/" + new_manifest_filename;
+    std::string temp_path = new_manifest_path + ".tmp";
+
+    File temp_file(*ring_, temp_path, FileMode::Write);
+    auto write_res = co_await temp_file.write(buffer, 0);
+    if (write_res < 0) {
+        co_return std::unexpected("Failed to write to temporary MANIFEST file");
+    }
+    // 3. 重命名
+    if (std::rename(temp_path.c_str(), new_manifest_path.c_str()) != 0) {
+        co_return std::unexpected("Failed to rename temporary MANIFEST file.");
+    }
+
+    // 4. 异步更新CURRENT文件
+    std::vector<std::byte> current_buffer(new_manifest_filename.size());
+    std::memcpy(current_buffer.data(), new_manifest_filename.data(), new_manifest_filename.size());
+    File current_file(*ring_, current_path_, FileMode::Write);
+    write_res = co_await current_file.write(current_buffer, 0);
+    if (write_res < 0) {
+        co_return std::unexpected("Failed to write to CURRENT file");
+    }
+    co_return {};
+}
+
+std::string ManifestFile::get_new_manifest_filename() {
+    int max_num = 0;
+    if (std::filesystem::exists(path_)) {
+        for (const auto& entry : std::filesystem::directory_iterator(path_)) {
+            if (entry.is_regular_file()) {
+                std::string filename = entry.path().filename().string();
+                if (filename.starts_with("MANIFEST-")) {
+                    int num = std::stoi(filename.substr(9));
+                    max_num = std::max(num, max_num);
+                }
             }
         }
     }

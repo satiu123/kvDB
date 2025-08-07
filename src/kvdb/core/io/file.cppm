@@ -4,15 +4,17 @@ import std;
 import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
+
+export namespace kvdb::core::io {
 // 导出文件打开模式的枚举类
-export enum class FileMode : std::uint8_t {
+enum class FileMode : std::uint8_t {
     Read,      // 只读
     Write,     // 只写（创建/覆盖）
     ReadWrite  // 读写（创建/覆盖）
 };
 
 // 导出一个封装文件描述符的RAII类
-export class File {
+class File {
   public:
     // 构造函数：根据路径和模式打开文件
     File(IOUring& ring, const std::string& path, FileMode mode);
@@ -42,7 +44,11 @@ export class File {
     static void remove(const std::string& path);
 
   private:
+    void open_if_needed();
+
     IOUring* ring_;
     int fd_{-1};  // 文件描述符
     std::string path_;
+    FileMode mode_;
 };
+}  // namespace kvdb::core::io

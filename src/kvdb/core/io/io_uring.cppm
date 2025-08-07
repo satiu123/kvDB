@@ -2,9 +2,10 @@ export module kvdb.core.io.io_uring;
 
 import std;
 import kvdb.core.coro.awaiter.io_awaiter;
+export namespace kvdb::core::io {
 
 // 导出IOUring类，封装io_uring的核心功能
-export class IOUring {
+class IOUring {
   public:
     // 构造函数，初始化一个指定队列深度的io_uring实例
     explicit IOUring(unsigned int queue_depth);
@@ -53,3 +54,4 @@ export class IOUring {
     // 标记实例是否成功初始化
     bool initialized_{false};
 };
+}  // namespace kvdb::core::io
