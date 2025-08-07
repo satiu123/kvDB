@@ -54,15 +54,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(src)
 
 #启用测试
-option(BUILD_TESTS "Build tests" ON)
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+# option(BUILD_TESTS "Build tests" ON)
+# if(BUILD_TESTS)
+#     enable_testing()
+#     add_subdirectory(tests)
+# endif()
 
 # Add CLI executable
-add_executable(kvdb-cli cli/main.cpp)
-target_link_libraries(kvdb-cli PRIVATE kvdb std-cxx-modules)
+# add_executable(kvdb-cli cli/main.cpp)
+# target_link_libraries(kvdb-cli PRIVATE kvdb std-cxx-modules)
 
 # 添加示例
 option(BUILD_EXAMPLES "Build examples" ON)

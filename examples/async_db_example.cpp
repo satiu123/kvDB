@@ -6,7 +6,7 @@ import kvdb.core.coro.task;
 // 定义一个异步任务，用于测试数据库功能
 auto test_async_db(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::Task<void> {
     // 打开数据库（这会异步加载 manifest 等）
-    co_await db.open();
+    co_await db.init();
 
     // 打印 manifest 内容以供调试
     db.printManifest();
@@ -30,7 +30,7 @@ auto test_async_db(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::Task<void
     } else {
         std::cout << "Remove 测试失败。" << std::endl;
     }
-
+    // db.printWALRecords();
     std::cout << "测试完成。" << std::endl;
 }
 

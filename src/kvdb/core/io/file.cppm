@@ -17,6 +17,7 @@ enum class FileMode : std::uint8_t {
 class File {
   public:
     // 构造函数：根据路径和模式打开文件
+    File();
     File(IOUring& ring, const std::string& path, FileMode mode);
 
     // 析构函数：自动关闭文件描述符
@@ -33,12 +34,14 @@ class File {
     // 异步读取
     [[nodiscard]] auto read(std::span<std::byte> buffer, std::uint64_t offset) -> ReadAwaiter;
 
-    // 异步写入
-    [[nodiscard]] auto write(std::span<const std::byte> buffer, std::uint64_t offset)
+    // 异步写入 (offset = -1 表示追加)
+    [[nodiscard]] auto write(std::span<const std::byte> buffer, std::int64_t offset)
         -> WriteAwaiter;
 
-    // 获取原始的文件描述符，用于传递给IOUring等API
-    [[nodiscard]] int get_fd() const;
+    [[nodiscard]] int getFd() const;
+
+    // 获取文件大小
+    [[nodiscard]] std::size_t get_size();
 
     // 静态方法，用于删除文件
     static void remove(const std::string& path);
@@ -50,5 +53,6 @@ class File {
     int fd_{-1};  // 文件描述符
     std::string path_;
     FileMode mode_;
+    std::atomic<std::size_t> file_size_{0};
 };
 }  // namespace kvdb::core::io

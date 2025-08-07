@@ -4,97 +4,83 @@ import std;
 import kvdb.logging.log;
 import kvdb.core.binary;
 
+using kvdb::core::binary::BytesBuffer;
+
 namespace kvdb::storage {
 
 // 构造函数
 WalRecord::WalRecord(WalOpType op_type, std::string_view key, std::string_view value,
                      std::uint64_t sequence_number)
-    : op_type_(op_type),
-      key_(key),
-      value_(value),
-      checksum_(calculateChecksum()),
-      sequence_number_(sequence_number) {
-    // 计算并存储校验和
+    : op_type_(op_type), key_(key), value_(value), sequence_number_(sequence_number) {
+    // 在构造时计算并存储校验和
+    checksum_ = calculateChecksum();
 }
 
-// 序列化记录为二进制数据
-std::vector<std::uint8_t> WalRecord::serialize() const {
-    std::stringstream buffer;
-    // 1. 操作类型
-    kvdb::core::binary::write_uint8(buffer, static_cast<std::uint8_t>(op_type_));
-    // 2. 键
-    kvdb::core::binary::write_string(buffer, key_);
-    // 3. 值
-    kvdb::core::binary::write_string(buffer, value_);
-    // 4. 序列号
-    kvdb::core::binary::write_uint64(buffer, sequence_number_);
+// 序列化记录为 std::vector<std::byte>
+auto WalRecord::serialize() const -> std::vector<std::byte> {
+    BytesBuffer payload_buf;
+    // 1. 写入核心数据到 payload buffer
+    kvdb::core::binary::write_uint8(payload_buf, static_cast<std::uint8_t>(op_type_));
+    kvdb::core::binary::write_string(payload_buf, key_);
+    kvdb::core::binary::write_string(payload_buf, value_);
+    kvdb::core::binary::write_uint64(payload_buf, sequence_number_);
 
-    std::string content = buffer.str();
-    std::vector<std::uint8_t> data(content.begin(), content.end());
+    // 2. 计算 payload 的校验和
+    std::uint32_t crc = kvdb::core::binary::calculate_crc32(payload_buf.get_span());
 
-    // 计算并前置校验和
-    std::uint32_t crc = kvdb::core::binary::calculate_crc32(data);
-    std::vector<std::uint8_t> crc_bytes(sizeof(crc));
-    std::memcpy(crc_bytes.data(), &crc, sizeof(crc));
-    data.insert(data.begin(), crc_bytes.begin(), crc_bytes.end());
+    // 3. 构建最终的完整记录 buffer
+    BytesBuffer final_buf;
+    auto total_size =
+        static_cast<std::uint32_t>(sizeof(std::uint32_t) * 2 + payload_buf.get_data().size());
+    kvdb::core::binary::write_uint32(final_buf, total_size);
+    kvdb::core::binary::write_uint32(final_buf, crc);
+    final_buf.push(payload_buf.get_data().data(), payload_buf.get_data().size());
 
-    // 前置总长度
-    auto total_size = static_cast<std::uint32_t>(data.size() + sizeof(std::uint32_t));
-    std::vector<std::uint8_t> size_bytes(sizeof(total_size));
-    std::memcpy(size_bytes.data(), &total_size, sizeof(total_size));
-    data.insert(data.begin(), size_bytes.begin(), size_bytes.end());
-
-    return data;
+    return final_buf.get_data();
 }
 
-// 从二进制数据反序列化记录
-auto WalRecord::deserialize(const std::vector<std::uint8_t>& data)
+// 从 std::span<const std::byte> 反序列化记录
+auto WalRecord::deserialize(std::span<const std::byte> data)
     -> std::expected<std::unique_ptr<WalRecord>, std::string> {
     if (data.empty()) {
         return std::unexpected("Cannot deserialize from empty data");
     }
-    return deserialize(data.data(), data.size());
-}
 
-auto WalRecord::deserialize(const std::uint8_t* data, std::size_t size)
-    -> std::expected<std::unique_ptr<WalRecord>, std::string> {
-    std::stringstream stream(std::string(reinterpret_cast<const char*>(data), size));
+    BytesBuffer buf(std::vector<std::byte>(data.begin(), data.end()));
 
     // 1. 读取总长度
-    auto total_size_res = kvdb::core::binary::read_uint32(stream);
+    auto total_size_res = kvdb::core::binary::read_uint32(buf);
     if (!total_size_res)
         return std::unexpected("Failed to read total size: " + total_size_res.error());
-    if (*total_size_res != size)
+    if (*total_size_res != data.size())
         return std::unexpected("Record size mismatch");
 
     // 2. 读取并校验CRC
-    auto stored_crc_res = kvdb::core::binary::read_uint32(stream);
+    auto stored_crc_res = kvdb::core::binary::read_uint32(buf);
     if (!stored_crc_res)
         return std::unexpected("Failed to read checksum: " + stored_crc_res.error());
 
-    // 剩下的部分是真实数据
-    std::string payload_str = stream.str().substr(sizeof(std::uint32_t) + sizeof(std::uint32_t));
-    std::vector<std::uint8_t> payload_vec(payload_str.begin(), payload_str.end());
-
-    if (kvdb::core::binary::calculate_crc32(payload_vec) != *stored_crc_res) {
+    // 3. 校验 payload
+    // 获取从当前偏移量到结尾的 payload span
+    auto payload_span = buf.get_span().subspan(buf.get_offset());
+    if (kvdb::core::binary::calculate_crc32(payload_span) != *stored_crc_res) {
         return std::unexpected("Checksum mismatch, record may be corrupted");
     }
 
-    // 3. 从真实数据中解析字段
-    std::stringstream payload_stream(payload_str);
-    auto op_type_res = kvdb::core::binary::read_uint8(payload_stream);
+    // 4. 从 payload 中解析字段
+    auto op_type_res = kvdb::core::binary::read_uint8(buf);
     if (!op_type_res)
         return std::unexpected(op_type_res.error());
 
-    auto key_res = kvdb::core::binary::read_string(payload_stream);
+    auto key_res = kvdb::core::binary::read_string(buf);
     if (!key_res)
         return std::unexpected(key_res.error());
 
-    auto value_res = kvdb::core::binary::read_string(payload_stream);
+    auto value_res = kvdb::core::binary::read_string(buf);
     if (!value_res)
         return std::unexpected(value_res.error());
 
-    auto seq_num_res = kvdb::core::binary::read_uint64(payload_stream);
+    auto seq_num_res = kvdb::core::binary::read_uint64(buf);
     if (!seq_num_res)
         return std::unexpected(seq_num_res.error());
 
@@ -134,17 +120,13 @@ std::string WalRecord::toString() const {
 
 // 计算记录的CRC32校验和
 std::uint32_t WalRecord::calculateChecksum() const {
-    std::stringstream buffer;
-    kvdb::core::binary::write_uint8(buffer, static_cast<std::uint8_t>(op_type_));
-    kvdb::core::binary::write_string(buffer, key_);
-    kvdb::core::binary::write_string(buffer, value_);
-    kvdb::core::binary::write_uint64(buffer, sequence_number_);
-
-    std::string content = buffer.str();
-    std::vector<std::uint8_t> data(content.begin(), content.end());
-    return kvdb::core::binary::calculate_crc32(data);
+    BytesBuffer payload_buf;
+    kvdb::core::binary::write_uint8(payload_buf, static_cast<std::uint8_t>(op_type_));
+    kvdb::core::binary::write_string(payload_buf, key_);
+    kvdb::core::binary::write_string(payload_buf, value_);
+    kvdb::core::binary::write_uint64(payload_buf, sequence_number_);
+    return kvdb::core::binary::calculate_crc32(payload_buf.get_span());
 }
-
 
 // 验证记录的校验和
 bool WalRecord::validateChecksum() const {

@@ -1,7 +1,7 @@
 export module kvdb.storage.wal.wal_record;
 
-
 import std;
+
 export namespace kvdb::storage {
 
 // WAL记录操作类型
@@ -24,13 +24,11 @@ class WalRecord {
                        std::uint64_t sequence_number = 0);
 
     // 从二进制数据反序列化一条记录
-    static auto deserialize(const std::vector<std::uint8_t>& data)
-        -> std::expected<std::unique_ptr<WalRecord>, std::string>;
-    static auto deserialize(const std::uint8_t* data, std::size_t size)
+    static auto deserialize(std::span<const std::byte> data)
         -> std::expected<std::unique_ptr<WalRecord>, std::string>;
 
     // 序列化记录为二进制数据
-    std::vector<std::uint8_t> serialize() const;
+    auto serialize() const -> std::vector<std::byte>;
 
     // 获取记录大小（序列化后）
     std::size_t size() const;

@@ -2,8 +2,9 @@ export module kvdb.core:async_database;
 
 import std;
 import kvdb.core.coro.task;
+import kvdb.core.database.async_manifest;
+import kvdb.storage.wal.async_wal;
 import kvdb.core.database.manifest;
-import kvdb.storage;
 
 import kvdb.core.io.io_uring;
 
@@ -23,7 +24,7 @@ class AsyncDatabase {
     auto put(std::string_view key, std::string_view value) -> kvdb::core::coro::Task<bool>;
     auto get(std::string_view key) -> kvdb::core::coro::Task<std::optional<std::string>>;
     auto remove(std::string_view key) -> kvdb::core::coro::Task<bool>;
-    auto open() -> kvdb::core::coro::Task<void>;
+    auto init() -> kvdb::core::coro::Task<void>;
 
     // 运行一个异步任务直到完成
     template <typename T>
@@ -55,7 +56,8 @@ class AsyncDatabase {
 
     // Debug用
     void printManifest() const;
-
+    void printWALRecords() const;
+    void printSSTables() const;
     // 获取内部的ring，供内部组件使用
     auto get_ring() -> kvdb::core::io::IOUring& {
         return *ring_;
@@ -68,8 +70,8 @@ class AsyncDatabase {
     std::unique_ptr<std::map<std::string, std::string, std::less<>>> immutable_memtable_;
 
     std::string sstables_path_;
-    std::unique_ptr<storage::Wal> wal_;
-    std::unique_ptr<database::ManifestFile> manifest_;
+    std::unique_ptr<storage::AsyncWal> wal_;
+    std::unique_ptr<database::AsyncManifestFile> manifest_;
     database::Manifest manifest_data_;
 };
 
