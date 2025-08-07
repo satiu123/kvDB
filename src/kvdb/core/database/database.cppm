@@ -43,8 +43,9 @@ class Database {
     auto get_locked(std::string_view key) const -> std::optional<std::string>;
 
     std::string sstables_path_;
-    std::map<std::string, std::string, std::less<>> data_;                                 // 可变 MemTable
-    std::unique_ptr<std::map<std::string, std::string, std::less<>>> immutable_memtable_;  // 不可变 MemTable
+    std::map<std::string, std::string, std::less<>> data_;  // 可变 MemTable
+    std::unique_ptr<std::map<std::string, std::string, std::less<>>>
+        immutable_memtable_;  // 不可变 MemTable
     mutable std::mutex mutex_;
 
     std::unique_ptr<storage::Wal> wal_;                        // WAL实例

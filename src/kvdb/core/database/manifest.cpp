@@ -49,7 +49,7 @@ auto Manifest::serialize(std::ostream& os) const -> std::expected<void, std::str
     return {};
 }
 
-auto Manifest::deserialize(std::istream& is) -> std::expected<void, std::string>{
+auto Manifest::deserialize(std::istream& is) -> std::expected<void, std::string> {
     auto crc_res = binary::read_uint32(is);
     if (!crc_res)
         return std::unexpected(crc_res.error());
@@ -106,10 +106,10 @@ auto Manifest::deserialize(std::istream& is) -> std::expected<void, std::string>
 // --- ManifestFile 实现 ---
 
 ManifestFile::ManifestFile(std::string_view path)
-    : path_(path), current_path_(std::string(path) + "/CURRENT") {}
+    : path_(std::string(path) + "/manifest"), current_path_(path_ + "/CURRENT") {}
 
 ManifestFile::ManifestFile(IOUring& ring, std::string_view path)
-    : ring_(&ring), path_(path), current_path_(std::string(path) + "/CURRENT") {}
+    : ring_(&ring), path_(std::string(path) + "/manifest"), current_path_(path_ + "/CURRENT") {}
 
 auto ManifestFile::load() -> std::expected<Manifest, std::string> {
     std::ifstream current_file(current_path_);
