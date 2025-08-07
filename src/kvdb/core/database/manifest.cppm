@@ -13,9 +13,9 @@ struct Manifest {
     std::map<int, std::vector<std::string>> sstables;
 
     // 将Manifest序列化到输出流
-    std::expected<void, std::string> serialize(std::ostream& os) const;
+    auto serialize(std::ostream& os) const -> std::expected<void, std::string>;
     // 从输入流反序列化Manifest
-    std::expected<void, std::string> deserialize(std::istream& is);
+    auto deserialize(std::istream& is) -> std::expected<void, std::string>;
 };
 
 class ManifestFile {

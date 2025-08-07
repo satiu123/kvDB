@@ -22,10 +22,10 @@ class BloomFilter {
     // 序列化布隆过滤器
     void serialize(std::ostream& os) const;
     // 反序列化布隆过滤器
-    static std::optional<BloomFilter> deserialize(std::istream& is);
+    static auto deserialize(std::istream& is) -> std::optional<BloomFilter>;
 
   private:
-    std::array<std::uint64_t, 2> hash(std::string_view key) const;
+    auto hash(std::string_view key) const -> std::array<std::uint64_t, 2>;
 
     std::uint32_t num_hash_functions_;
     std::vector<bool> bit_set_;

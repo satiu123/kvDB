@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include <filesystem>
 #include <memory>
 
@@ -32,12 +33,12 @@ TEST(ManifestTest, SerializationDeserialization) {
     EXPECT_TRUE(new_manifest.sstables.contains(2));
     EXPECT_EQ(new_manifest.sstables[2], original_manifest.sstables[2]);
 
-    EXPECT_FALSE(new_manifest.sstables.contains(1)); // 确保不存在的层级也没有被意外添加
+    EXPECT_FALSE(new_manifest.sstables.contains(1));  // 确保不存在的层级也没有被意外添加
 }
 
 // 测试 ManifestFile 的存储和加载功能
 class ManifestFileTest : public ::testing::Test {
-protected:
+  protected:
     void SetUp() override {
         cleanup();
         std::filesystem::create_directories(test_dir);

@@ -48,16 +48,16 @@ std::vector<std::uint8_t> WalRecord::serialize() const {
 }
 
 // 从二进制数据反序列化记录
-std::expected<std::unique_ptr<WalRecord>, std::string> WalRecord::deserialize(
-    const std::vector<std::uint8_t>& data) {
+auto WalRecord::deserialize(const std::vector<std::uint8_t>& data)
+    -> std::expected<std::unique_ptr<WalRecord>, std::string> {
     if (data.empty()) {
         return std::unexpected("Cannot deserialize from empty data");
     }
     return deserialize(data.data(), data.size());
 }
 
-std::expected<std::unique_ptr<WalRecord>, std::string> WalRecord::deserialize(
-    const std::uint8_t* data, std::size_t size) {
+auto WalRecord::deserialize(const std::uint8_t* data, std::size_t size)
+    -> std::expected<std::unique_ptr<WalRecord>, std::string> {
     std::stringstream stream(std::string(reinterpret_cast<const char*>(data), size));
 
     // 1. 读取总长度

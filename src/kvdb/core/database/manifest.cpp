@@ -17,7 +17,7 @@ namespace kvdb::core::database {
 
 // --- Manifest 实现 ---
 
-std::expected<void, std::string> Manifest::serialize(std::ostream& os) const {
+auto Manifest::serialize(std::ostream& os) const -> std::expected<void, std::string> {
     std::stringstream buffer;
 
     if (auto res = binary::write_uint64(buffer, last_wal_sequence_number); !res)
@@ -49,7 +49,7 @@ std::expected<void, std::string> Manifest::serialize(std::ostream& os) const {
     return {};
 }
 
-std::expected<void, std::string> Manifest::deserialize(std::istream& is) {
+auto Manifest::deserialize(std::istream& is) -> std::expected<void, std::string>{
     auto crc_res = binary::read_uint32(is);
     if (!crc_res)
         return std::unexpected(crc_res.error());

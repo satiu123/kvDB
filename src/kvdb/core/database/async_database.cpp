@@ -18,22 +18,22 @@ AsyncDatabase::AsyncDatabase(std::string_view base_path) {
     manifest_ = std::make_unique<database::ManifestFile>(ring, base_path);
 }
 
-kvdb::core::coro::Task<void> AsyncDatabase::open() {
+auto AsyncDatabase::open() -> kvdb::core::coro::Task<void>{
     auto manifest_data = co_await manifest_->async_load();
     if (manifest_data) {
         manifest_data_ = std::move(manifest_data.value());
     }
 }
 
-kvdb::core::coro::Task<bool> AsyncDatabase::put(std::string_view, std::string_view) {
+auto AsyncDatabase::put(std::string_view, std::string_view) -> kvdb::core::coro::Task<bool>{
     co_return true;
 }
 
-kvdb::core::coro::Task<std::optional<std::string>> AsyncDatabase::get(std::string_view) {
+auto AsyncDatabase::get(std::string_view) -> kvdb::core::coro::Task<std::optional<std::string>>{
     co_return std::nullopt;
 }
 
-kvdb::core::coro::Task<bool> AsyncDatabase::remove(std::string_view) {
+auto AsyncDatabase::remove(std::string_view) -> kvdb::core::coro::Task<bool>{
     co_return true;
 }
 

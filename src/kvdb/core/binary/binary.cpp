@@ -59,7 +59,7 @@ static void read_object(std::istream& is, T& value) {
     is.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
 }
 
-std::expected<void, std::string> write_uint8(std::ostream& os, std::uint8_t value) {
+auto write_uint8(std::ostream& os, std::uint8_t value) -> std::expected<void, std::string>{
     // 对于单个字节，使用 put() 是最符合语义且最安全的方式
     os.put(static_cast<char>(value));
     if (!os) {
@@ -68,7 +68,7 @@ std::expected<void, std::string> write_uint8(std::ostream& os, std::uint8_t valu
     return {};
 }
 
-std::expected<void, std::string> write_uint32(std::ostream& os, std::uint32_t value) {
+auto write_uint32(std::ostream& os, std::uint32_t value) -> std::expected<void, std::string>{
     // 对于多字节整数，直接写入其内存表示
     write_object(os, value);
     if (!os) {
@@ -77,7 +77,7 @@ std::expected<void, std::string> write_uint32(std::ostream& os, std::uint32_t va
     return {};
 }
 
-std::expected<void, std::string> write_uint64(std::ostream& os, std::uint64_t value) {
+auto write_uint64(std::ostream& os, std::uint64_t value) -> std::expected<void, std::string>{
     // 对于多字节整数，直接写入其内存表示
     write_object(os, value);
     if (!os) {
@@ -86,7 +86,7 @@ std::expected<void, std::string> write_uint64(std::ostream& os, std::uint64_t va
     return {};
 }
 
-std::expected<void, std::string> write_string(std::ostream& os, std::string_view str) {
+auto write_string(std::ostream& os, std::string_view str) -> std::expected<void, std::string>{
     // 首先，以 uint32 格式写入字符串的长度
     if (auto result = write_uint32(os, static_cast<std::uint32_t>(str.length())); !result) {
         return std::unexpected(result.error());
@@ -99,7 +99,7 @@ std::expected<void, std::string> write_string(std::ostream& os, std::string_view
     return {};
 }
 
-std::expected<std::uint8_t, std::string> read_uint8(std::istream& is) {
+auto read_uint8(std::istream& is) -> std::expected<std::uint8_t, std::string>{
     // 对于单个字节，使用 get() 是最符合语义的方式
     int ch = is.get();
     if (ch == std::istream::traits_type::eof()) {
@@ -108,7 +108,7 @@ std::expected<std::uint8_t, std::string> read_uint8(std::istream& is) {
     return static_cast<std::uint8_t>(ch);
 }
 
-std::expected<std::uint32_t, std::string> read_uint32(std::istream& is) {
+auto read_uint32(std::istream& is) -> std::expected<std::uint32_t, std::string>{
     std::uint32_t value = 0;
     read_object(is, value);
     if (!is) {
@@ -117,7 +117,7 @@ std::expected<std::uint32_t, std::string> read_uint32(std::istream& is) {
     return value;
 }
 
-std::expected<std::uint64_t, std::string> read_uint64(std::istream& is) {
+auto read_uint64(std::istream& is) -> std::expected<std::uint64_t, std::string>{
     std::uint64_t value = 0;
     read_object(is, value);
     if (!is) {
@@ -126,7 +126,7 @@ std::expected<std::uint64_t, std::string> read_uint64(std::istream& is) {
     return value;
 }
 
-std::expected<std::string, std::string> read_string(std::istream& is) {
+auto read_string(std::istream& is) -> std::expected<std::string, std::string>{
     // 首先读取字符串长度
     auto len_result = read_uint32(is);
     if (!len_result) {

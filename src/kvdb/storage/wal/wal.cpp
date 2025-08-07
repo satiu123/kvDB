@@ -154,7 +154,7 @@ bool Wal::replay(const std::function<bool(const WalRecord&)>& handler) {
     return true;
 }
 
-std::expected<std::unique_ptr<WalRecord>, std::string> Wal::readNextRecord() {
+auto Wal::readNextRecord() -> std::expected<std::unique_ptr<WalRecord>, std::string> {
     if (!is_open_ || file_.peek() == std::ios::traits_type::eof()) {
         return std::unexpected("WAL文件未打开或已到达末尾");
     }
@@ -200,7 +200,7 @@ void Wal::close() {
     }
 }
 
-std::expected<std::vector<std::string>, std::string> Wal::getFormattedContent() {
+auto Wal::getFormattedContent() -> std::expected<std::vector<std::string>, std::string> {
     std::lock_guard<std::mutex> lock(mutex_);
     if (isEmpty_locked())
         return std::vector<std::string>{};

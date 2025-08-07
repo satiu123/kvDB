@@ -9,7 +9,7 @@ void run_task(kvdb::core::coro::Task<void>&& task) {
     }
 }
 
-kvdb::core::coro::Task<void> test_async_db(const std::string& db_path) {
+auto test_async_db(const std::string& db_path) -> kvdb::core::coro::Task<void>{
     auto db = std::make_unique<kvdb::core::AsyncDatabase>(db_path);
     co_await db->open();
 

@@ -4,7 +4,8 @@ import kvdb.logging.log;
 namespace kvdb::logging {
 
 // 工厂函数实现
-std::expected<std::shared_ptr<FileSink>, std::string> FileSink::create(std::string_view filePath) {
+auto FileSink::create(std::string_view filePath)
+    -> std::expected<std::shared_ptr<FileSink>, std::string> {
     // 使用 new FileSink(filePath) 因为构造函数是私有的
     auto sink = std::shared_ptr<FileSink>(new FileSink(filePath));
     if (sink->open()) {

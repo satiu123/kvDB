@@ -26,7 +26,7 @@ export class [[nodiscard]] SSTableReaderAwaiter {
     }
 
     // 协程恢复后，返回结果。
-    std::optional<std::string> await_resume() noexcept {
+    auto await_resume() noexcept -> std::optional<std::string> {
         return result_;
     }
 

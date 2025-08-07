@@ -158,7 +158,7 @@ bool SSTable::loadIndex() {
     return true;
 }
 
-std::optional<std::string> SSTable::find(std::string_view key) {
+auto SSTable::find(std::string_view key) -> std::optional<std::string>{
     if (bloom_filter_ && !bloom_filter_->contains(key)) {
         return std::nullopt;
     }
@@ -212,7 +212,7 @@ std::optional<std::string> SSTable::find(std::string_view key) {
     return std::nullopt;
 }
 
-std::map<std::string, std::string> SSTable::readAll() {
+auto SSTable::readAll() -> std::map<std::string, std::string>{
     std::map<std::string, std::string> data;
     file_.clear();  // 重置流状态（例如，来自先前读取的EOF）
     file_.seekg(0);

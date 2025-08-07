@@ -20,7 +20,7 @@ class Database {
 
     // 基本操作
     bool put(std::string_view key, std::string_view value);
-    std::optional<std::string> get(std::string_view key) const;
+    auto get(std::string_view key) const -> std::optional<std::string>;
     bool remove(std::string_view key);
 
     // 高级操作
@@ -39,8 +39,8 @@ class Database {
   private:
     void recover();
     void flushMemtableIfNeeded();
-    std::map<std::string, std::string, std::less<>> get_all_data() const;
-    std::optional<std::string> get_locked(std::string_view key) const;
+    auto get_all_data() const -> std::map<std::string, std::string, std::less<>>;
+    auto get_locked(std::string_view key) const -> std::optional<std::string>;
 
     std::string sstables_path_;
     std::map<std::string, std::string, std::less<>> data_;                                 // 可变 MemTable

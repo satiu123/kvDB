@@ -18,10 +18,10 @@ class AsyncDatabase {
     AsyncDatabase& operator=(AsyncDatabase&&) = delete;
 
     // 异步操作
-    kvdb::core::coro::Task<bool> put(std::string_view key, std::string_view value);
-    kvdb::core::coro::Task<std::optional<std::string>> get(std::string_view key);
-    kvdb::core::coro::Task<bool> remove(std::string_view key);
-    kvdb::core::coro::Task<void> open();
+    auto put(std::string_view key, std::string_view value) -> kvdb::core::coro::Task<bool>;
+    auto get(std::string_view key) -> kvdb::core::coro::Task<std::optional<std::string>>;
+    auto remove(std::string_view key) -> kvdb::core::coro::Task<bool>;
+    auto open() -> kvdb::core::coro::Task<void>;
 
   private:
     // MemTable

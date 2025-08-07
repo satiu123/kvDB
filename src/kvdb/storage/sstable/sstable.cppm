@@ -49,8 +49,8 @@ class SSTable {
 
     // 用于读取的成员函数
     bool open(std::string_view path);
-    std::optional<std::string> find(std::string_view key);
-    std::map<std::string, std::string> readAll();
+    auto find(std::string_view key) -> std::optional<std::string>;
+    auto readAll() -> std::map<std::string, std::string>;
     const std::string& getPath() const {
         return path_;
     }

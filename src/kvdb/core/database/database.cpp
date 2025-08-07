@@ -95,7 +95,7 @@ bool Database::put(std::string_view key, std::string_view value) {
     return true;
 }
 
-std::optional<std::string> Database::get_locked(std::string_view key) const {
+auto Database::get_locked(std::string_view key) const -> std::optional<std::string> {
     auto it = data_.find(key);
     if (it != data_.end()) {
         return it->second.empty() ? std::nullopt : std::optional(it->second);
@@ -118,7 +118,7 @@ std::optional<std::string> Database::get_locked(std::string_view key) const {
     return std::nullopt;
 }
 
-std::optional<std::string> Database::get(std::string_view key) const {
+auto Database::get(std::string_view key) const -> std::optional<std::string> {
     std::lock_guard<std::mutex> lock(mutex_);
     return get_locked(key);
 }
@@ -179,7 +179,7 @@ bool Database::exists(std::string_view key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     return get_locked(key).has_value();
 }
-std::map<std::string, std::string, std::less<>> Database::get_all_data() const {
+auto Database::get_all_data() const -> std::map<std::string, std::string, std::less<>> {
     std::map<std::string, std::string, std::less<>> all_data;
 
     // 从SSTables读取数据

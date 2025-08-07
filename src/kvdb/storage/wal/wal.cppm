@@ -85,7 +85,7 @@ class Wal {
      * @brief 获取格式化的WAL内容
      * @return 格式化的WAL内容字符串数组
      */
-    std::expected<std::vector<std::string>, std::string> getFormattedContent();
+    auto getFormattedContent() -> std::expected<std::vector<std::string>, std::string>;
 
     /**
      * @brief 获取最后的序列号
@@ -127,7 +127,7 @@ class Wal {
      * @brief 读取下一个记录
      * @return 下一个记录，如果到达文件末尾或出错则返回nullptr
      */
-    std::expected<std::unique_ptr<WalRecord>, std::string> readNextRecord();
+    auto readNextRecord() -> std::expected<std::unique_ptr<WalRecord>, std::string>;
 };
 
 }  // namespace kvdb::storage

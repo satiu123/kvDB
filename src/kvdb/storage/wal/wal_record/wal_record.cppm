@@ -24,10 +24,10 @@ class WalRecord {
                        std::uint64_t sequence_number = 0);
 
     // 从二进制数据反序列化一条记录
-    static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
-        const std::vector<std::uint8_t>& data);
-    static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
-        const std::uint8_t* data, std::size_t size);
+    static auto deserialize(const std::vector<std::uint8_t>& data)
+        -> std::expected<std::unique_ptr<WalRecord>, std::string>;
+    static auto deserialize(const std::uint8_t* data, std::size_t size)
+        -> std::expected<std::unique_ptr<WalRecord>, std::string>;
 
     // 序列化记录为二进制数据
     std::vector<std::uint8_t> serialize() const;
