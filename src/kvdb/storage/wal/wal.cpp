@@ -82,14 +82,13 @@ bool Wal::appendRecord(const WalRecord& record) {
 void Wal::syncLoop() {
     while (true) {
         std::unique_lock<std::mutex> lock(sync_mutex_);
-        cv_.wait_for(lock, std::chrono::milliseconds(10), [this] {
-            return stop_sync_.load() || has_new_data_.load();
-        });
+        cv_.wait_for(lock, std::chrono::milliseconds(10),
+                     [this] { return stop_sync_.load() || has_new_data_.load(); });
 
         // 只要有数据，就先同步，不管是否要停止
         if (has_new_data_.load()) {
             has_new_data_ = false;
-            sync(); 
+            sync();
         }
 
         // 同步完所有数据后，如果收到了停止信号，就安全退出

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-import IOUring;
-import File; // 导入我们新的文件模块
+import kvdb.core.io.io_uring; // 导入我们新的IOUring模块
+import kvdb.core.io.file;     // 导入我们新的文件模块
 import std;
 import kvdb.core.coro.task;
 

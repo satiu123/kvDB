@@ -1,9 +1,10 @@
 module;
 
 #include <liburing.h>
+
 #include <stdexcept>
 
-module IOUring;
+module kvdb.core.io.io_uring;
 
 import std;
 import kvdb.core.coro.awaiter.io_awaiter;
@@ -34,14 +35,14 @@ IOUring::~IOUring() {
 }
 
 // 提交读请求
-auto IOUring::submit_read(int fd, std::span<std::byte> buffer,
-                          std::uint64_t offset) -> ReadAwaiter {
+auto IOUring::submit_read(int fd, std::span<std::byte> buffer, std::uint64_t offset)
+    -> ReadAwaiter {
     return ReadAwaiter{this, fd, buffer, offset};
 }
 
 // 提交写请求
-auto IOUring::submit_write(int fd, std::span<const std::byte> buffer,
-                           std::uint64_t offset) -> WriteAwaiter {
+auto IOUring::submit_write(int fd, std::span<const std::byte> buffer, std::uint64_t offset)
+    -> WriteAwaiter {
     return WriteAwaiter{this, fd, buffer, offset};
 }
 
@@ -57,8 +58,7 @@ void IOUring::wait_for_completion() {
     }
 
     // 从CQE中提取结果和用户数据
-    auto user_data =
-        reinterpret_cast<std::uint64_t>(io_uring_cqe_get_data(cqe));
+    auto user_data = reinterpret_cast<std::uint64_t>(io_uring_cqe_get_data(cqe));
     auto result = cqe->res;
 
     // 标记CQE为已处理

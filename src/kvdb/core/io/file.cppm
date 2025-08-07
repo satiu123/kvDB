@@ -1,7 +1,7 @@
-export module File;
+export module kvdb.core.io.file;
 
 import std;
-import IOUring;
+import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
 // 导出文件打开模式的枚举类

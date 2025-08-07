@@ -6,10 +6,10 @@ module;
 
 #include <system_error>
 
-module File;
+module kvdb.core.io.file;
 
 import std;
-import IOUring;
+import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
 
