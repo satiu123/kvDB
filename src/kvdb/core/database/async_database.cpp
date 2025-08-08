@@ -18,9 +18,7 @@ namespace kvdb::core {
 AsyncDatabase::AsyncDatabase(std::string_view base_path)
     : ring_(std::make_unique<io::IOUring>(1024)),
       wal_(std::make_unique<storage::AsyncWal>(*ring_, base_path)),
-      manifest_(
-          std::make_unique<database::AsyncManifestFile>(*ring_, base_path)) {  // 内部创建 IOUring
-}
+      manifest_(std::make_unique<database::AsyncManifestFile>(*ring_, base_path)) {}
 
 auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
     // 1. 异步加载 Manifest
@@ -98,8 +96,8 @@ auto AsyncDatabase::remove(std::string_view key) -> kvdb::core::coro::Task<bool>
     // 这里的语义可以根据需要调整，目前返回是否有实际删除
     co_return num_erased > 0;
 }
-void AsyncDatabase::printWALRecords() const {
-    auto records = wal_->getFormattedContent();
+Task<void> AsyncDatabase::printWALRecords() const {
+    auto records = co_await wal_->getFormattedContent();
     if (records) {
         std::cout << "--- WAL Records ---" << std::endl;
         for (const auto& record : *records) {
@@ -108,7 +106,7 @@ void AsyncDatabase::printWALRecords() const {
     } else {
         std::cerr << "获取WAL记录失败: " << records.error() << std::endl;
     }
-    return;
+    co_return;
 }
 
 // void AsyncDatabase::printSSTables() const {

@@ -5,9 +5,10 @@ import kvdb.core.coro.task;
 import kvdb.core.database.async_manifest;
 import kvdb.storage.wal.async_wal;
 import kvdb.core.database.manifest;
+import kvdb.core.coro.task;
 
 import kvdb.core.io.io_uring;
-
+using kvdb::core::coro::Task;
 export namespace kvdb::core {
 
 class AsyncDatabase {
@@ -56,7 +57,7 @@ class AsyncDatabase {
 
     // Debug用
     void printManifest() const;
-    void printWALRecords() const;
+    Task<void> printWALRecords() const;
     void printSSTables() const;
     // 获取内部的ring，供内部组件使用
     auto get_ring() -> kvdb::core::io::IOUring& {

@@ -18,9 +18,11 @@ class [[nodiscard]] Task {
         }
         auto final_suspend() noexcept {
             struct awaiter {
-                bool await_ready() noexcept { return false; }
-                std::coroutine_handle<>
-                await_suspend(std::coroutine_handle<promise_type> h) noexcept {
+                bool await_ready() noexcept {
+                    return false;
+                }
+                std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<promise_type> h) noexcept {
                     auto continuation = h.promise().continuation;
                     if (continuation) {
                         return continuation;
@@ -32,13 +34,13 @@ class [[nodiscard]] Task {
             return awaiter{};
         }
         void return_value(T value) {
-            this->value = std::move(value);
+            this->value.emplace(std::move(value));
         }
         void unhandled_exception() {
             std::terminate();
         }
 
-        T value;
+        std::optional<T> value;
         std::coroutine_handle<> continuation = nullptr;
     };
 
@@ -82,7 +84,7 @@ class [[nodiscard]] Task {
             }
 
             T await_resume() noexcept {
-                return std::move(handle_.promise().value);
+                return std::move(*handle_.promise().value);
             }
         };
         return awaiter{handle_};
@@ -103,7 +105,7 @@ class [[nodiscard]] Task {
 
     // 获取结果
     T get() {
-        return std::move(handle_.promise().value);
+        return std::move(*handle_.promise().value);
     }
 
   private:
@@ -124,9 +126,11 @@ class [[nodiscard]] Task<void> {
         }
         auto final_suspend() noexcept {
             struct awaiter {
-                bool await_ready() noexcept { return false; }
-                std::coroutine_handle<>
-                await_suspend(std::coroutine_handle<promise_type> h) noexcept {
+                bool await_ready() noexcept {
+                    return false;
+                }
+                std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<promise_type> h) noexcept {
                     auto continuation = h.promise().continuation;
                     if (continuation) {
                         return continuation;

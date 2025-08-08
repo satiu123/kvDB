@@ -35,16 +35,18 @@ class AsyncWal {
     Task<bool> async_append_clear();
     Task<bool> async_append_record(const WalRecord& record);
     Task<bool> async_replay(const std::function<bool(const WalRecord&)>& handler);
+    Task<std::expected<WalRecord, std::string>> async_read_next_record();
 
     // --- 通用 API ---
     std::uint64_t getLastSequenceNumber() const;
     void setCurrentSequenceNumber(std::uint64_t seq);
-    auto getFormattedContent() -> std::expected<std::vector<std::string>, std::string>;
+    auto getFormattedContent() -> Task<std::expected<std::vector<std::string>, std::string>>;
 
   private:
     IOUring* ring_{nullptr};
     File wal_file_;
     std::atomic<std::uint64_t> sequence_number_{0};  // 序列号，用于记录操作顺序
+    std::uint64_t read_offset_{0};                   // 用于追踪读取位置
 };
 
 }  // namespace kvdb::storage

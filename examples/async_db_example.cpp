@@ -20,6 +20,8 @@ auto test_async_db(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::Task<void
     } else {
         std::cout << "Put/Get 测试失败。" << std::endl;
     }
+    co_await db.put("key2", "value2");
+    co_await db.put("key3", "value3");
 
     // 2. 测试 Remove
     std::cout << "测试 Remove..." << std::endl;
@@ -30,7 +32,7 @@ auto test_async_db(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::Task<void
     } else {
         std::cout << "Remove 测试失败。" << std::endl;
     }
-    // db.printWALRecords();
+    co_await db.printWALRecords();
     std::cout << "测试完成。" << std::endl;
 }
 
