@@ -2,91 +2,96 @@ module kvdb.core.database.manifest;
 
 import std;
 import kvdb.core.binary;
+
+using kvdb::core::binary::BytesBuffer;
+using kvdb::core::binary::BytesBufferView;
+
 namespace kvdb::core::database {
 
 auto Manifest::serialize(std::ostream& os) const -> std::expected<void, std::string> {
-    std::stringstream buffer;
+    BytesBuffer buffer;
 
-    if (auto res = binary::write_uint64(buffer, last_wal_sequence_number); !res)
-        return std::unexpected(res.error());
-    if (auto res = binary::write_uint32(buffer, static_cast<std::uint32_t>(sstables.size())); !res)
-        return std::unexpected(res.error());
+    // 使用 BytesBuffer 构建 payload
+    buffer.push(reinterpret_cast<const std::byte*>(&last_wal_sequence_number), sizeof(last_wal_sequence_number));
+    auto sstables_size = static_cast<std::uint32_t>(sstables.size());
+    buffer.push(reinterpret_cast<const std::byte*>(&sstables_size), sizeof(sstables_size));
 
     for (const auto& [level, files] : sstables) {
-        if (auto res = binary::write_uint32(buffer, static_cast<std::uint32_t>(level)); !res)
-            return std::unexpected(res.error());
-        if (auto res = binary::write_uint32(buffer, static_cast<std::uint32_t>(files.size())); !res)
-            return std::unexpected(res.error());
+        auto level_u32 = static_cast<std::uint32_t>(level);
+        auto files_size = static_cast<std::uint32_t>(files.size());
+        buffer.push(reinterpret_cast<const std::byte*>(&level_u32), sizeof(level_u32));
+        buffer.push(reinterpret_cast<const std::byte*>(&files_size), sizeof(files_size));
         for (const auto& file : files) {
-            if (auto res = binary::write_string(buffer, file); !res)
-                return std::unexpected(res.error());
+            buffer.push_string(file);
         }
     }
 
-    std::string content = buffer.str();
-    std::vector<std::uint8_t> data_vec(content.begin(), content.end());
-    std::uint32_t crc = binary::calculate_crc32(data_vec);
-    if (auto res = binary::write_uint32(os, crc); !res)
-        return std::unexpected(res.error());
+    // 计算 payload 的 CRC
+    auto payload_span = buffer.get_span();
+    std::uint32_t crc = binary::calculate_crc32(payload_span);
 
-    os.write(content.c_str(), content.size());
-    if (!os)
-        return std::unexpected("Failed to write manifest content to output stream");
+    // 写入 CRC 和 payload 到输出流
+    os.write(reinterpret_cast<const char*>(&crc), sizeof(crc));
+    os.write(reinterpret_cast<const char*>(payload_span.data()), payload_span.size());
+
+    if (!os) {
+        return std::unexpected("Failed to write manifest to output stream");
+    }
 
     return {};
 }
 
 auto Manifest::deserialize(std::istream& is) -> std::expected<void, std::string> {
-    auto crc_res = binary::read_uint32(is);
-    if (!crc_res)
-        return std::unexpected(crc_res.error());
-    std::uint32_t stored_crc = *crc_res;
+    // 读取 CRC
+    std::uint32_t stored_crc;
+    is.read(reinterpret_cast<char*>(&stored_crc), sizeof(stored_crc));
+    if (!is) {
+        return std::unexpected("Failed to read manifest checksum");
+    }
 
-    std::string content((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
+    // 读取剩余的 payload
+    std::string payload_str((std::istreambuf_iterator<char>(is)), std::istreambuf_iterator<char>());
     if (is.bad()) {
-        return std::unexpected("Failed to read manifest content");
+        return std::unexpected("Failed to read manifest payload");
+    }
+    std::span<const std::byte> payload_span(reinterpret_cast<const std::byte*>(payload_str.data()), payload_str.size());
+
+    // 校验 CRC
+    if (binary::calculate_crc32(payload_span) != stored_crc) {
+        return std::unexpected("Manifest checksum mismatch. File may be corrupted.");
     }
 
-    std::vector<std::uint8_t> data_vec(content.begin(), content.end());
-    std::uint32_t calculated_crc = binary::calculate_crc32(data_vec);
+    // 使用 BytesBufferView 从 payload 中解析数据
+    BytesBufferView buffer(payload_span);
 
-    if (stored_crc != calculated_crc) {
-        return std::unexpected("Manifest checksum mismatch. The file may be corrupted.");
-    }
-
-    std::stringstream buffer(content);
-    auto seq_num_res = binary::read_uint64(buffer);
-    if (!seq_num_res)
-        return std::unexpected(seq_num_res.error());
+    auto seq_num_res = buffer.read_uint64();
+    if (!seq_num_res) return std::unexpected(seq_num_res.error());
     last_wal_sequence_number = *seq_num_res;
 
-    auto levels_res = binary::read_uint32(buffer);
-    if (!levels_res)
-        return std::unexpected(levels_res.error());
+    auto levels_res = buffer.read_uint32();
+    if (!levels_res) return std::unexpected(levels_res.error());
     std::uint32_t sstable_levels = *levels_res;
 
     sstables.clear();
     for (std::uint32_t i = 0; i < sstable_levels; ++i) {
-        auto level_res = binary::read_uint32(buffer);
-        if (!level_res)
-            return std::unexpected(level_res.error());
+        auto level_res = buffer.read_uint32();
+        if (!level_res) return std::unexpected(level_res.error());
         std::uint32_t level = *level_res;
 
-        auto num_files_res = binary::read_uint32(buffer);
-        if (!num_files_res)
-            return std::unexpected(num_files_res.error());
+        auto num_files_res = buffer.read_uint32();
+        if (!num_files_res) return std::unexpected(num_files_res.error());
         std::uint32_t num_files = *num_files_res;
 
         std::vector<std::string> files;
         files.reserve(num_files);
         for (std::uint32_t j = 0; j < num_files; ++j) {
-            auto file_res = binary::read_string(buffer);
-            if (!file_res)
-                return std::unexpected(file_res.error());
-            files.push_back(*file_res);
+            auto file_res = buffer.read_string_view(); // 使用 read_string_view
+            if (!file_res) return std::unexpected(file_res.error());
+            files.emplace_back(*file_res);
         }
         sstables[static_cast<int>(level)] = std::move(files);
     }
+
     return {};
 }
 

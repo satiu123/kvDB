@@ -17,16 +17,7 @@ export namespace kvdb::storage {
  */
 class AsyncWal {
   public:
-    /**
-     * @brief 构造函数 (异步模式)
-     * @param ring IOUring实例的引用
-     * @param path WAL文件路径
-     */
     explicit AsyncWal(IOUring& ring, const std::filesystem::path& path);
-
-    /**
-     * @brief 析构函数
-     */
     ~AsyncWal() = default;
 
     // --- 异步 API ---
@@ -43,10 +34,19 @@ class AsyncWal {
     auto getFormattedContent() -> Task<std::expected<std::vector<std::string>, std::string>>;
 
   private:
+    // 填充读取缓冲区
+    Task<std::expected<std::size_t, std::string>> fill_read_buffer();
+
     IOUring* ring_{nullptr};
     File wal_file_;
-    std::atomic<std::uint64_t> sequence_number_{0};  // 序列号，用于记录操作顺序
-    std::uint64_t read_offset_{0};                   // 用于追踪读取位置
+    std::atomic<std::uint64_t> sequence_number_{0};
+
+    // --- 读取状态 ---
+    static constexpr std::size_t READ_BUFFER_SIZE = 8 * 1024 * 1024;  // 8MB
+    std::vector<std::byte> read_buffer_;
+    std::uint64_t file_read_offset_ = 0;
+    std::size_t buffer_pos_ = 0;
+    std::size_t buffer_valid_size_ = 0;
 };
 
 }  // namespace kvdb::storage

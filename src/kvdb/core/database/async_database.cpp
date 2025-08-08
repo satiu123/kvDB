@@ -26,9 +26,9 @@ auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
     if (manifest_data_opt) {
         manifest_data_ = std::move(manifest_data_opt.value());
     }
-
+    std::uint64_t max_seq{manifest_data_.last_wal_sequence_number};
     // 2. 定义 WAL 重放逻辑
-    auto replay_handler = [this](const storage::WalRecord& record) {
+    auto replay_handler = [this, &max_seq](const storage::WalRecord& record) {
         switch (record.getOpType()) {
             case WalOpType::PUT:
                 memtable_[std::string(record.getKey())] = std::string(record.getValue());
@@ -40,6 +40,8 @@ auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
                 memtable_.clear();
                 break;
         }
+        // 更新序列号
+        max_seq = std::max(max_seq, record.getSequenceNumber());
         return true;  // 表示处理成功，继续重放
     };
 
@@ -53,7 +55,7 @@ auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
     }
 
     // 4. 更新数据库的序列号
-    wal_->setCurrentSequenceNumber(manifest_data_.last_wal_sequence_number);
+    wal_->setCurrentSequenceNumber(max_seq);
 }
 
 auto AsyncDatabase::put(std::string_view key, std::string_view value)
@@ -92,8 +94,6 @@ auto AsyncDatabase::remove(std::string_view key) -> kvdb::core::coro::Task<bool>
     // 2. WAL 写入成功后，再从内存中的 MemTable 中删除
     auto num_erased = memtable_.erase(std::string(key));
 
-    // 如果key不存在，返回false，但WAL已经写入了
-    // 这里的语义可以根据需要调整，目前返回是否有实际删除
     co_return num_erased > 0;
 }
 Task<void> AsyncDatabase::printWALRecords() const {

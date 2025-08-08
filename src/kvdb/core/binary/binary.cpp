@@ -4,99 +4,70 @@ import std;
 
 namespace kvdb::core::binary {
 
-// --- BytesBuffer 实现 ---
+// --- BytesBuffer (拥有所有权) ---
 
 void BytesBuffer::push(const std::byte* bytes, std::size_t size) {
     data_.insert(data_.end(), bytes, bytes + size);
 }
 
 void BytesBuffer::push_string(std::string_view str) {
-    // 先写入长度
     auto len = static_cast<std::uint32_t>(str.length());
     push(reinterpret_cast<const std::byte*>(&len), sizeof(len));
-    // 再写入内容
     push(reinterpret_cast<const std::byte*>(str.data()), str.length());
 }
 
-auto BytesBuffer::read(std::size_t size) -> std::expected<std::span<const std::byte>, std::string> {
-    if (offset_ + size > data_.size()) {
-        return std::unexpected("Read out of bounds");
+// --- BytesBufferView (非拥有所有权) ---
+
+// 写入实现
+
+
+auto BytesBufferView::write_uint8(std::uint8_t value) -> bool {
+    return write_object_view(*this, value);
+}
+auto BytesBufferView::write_uint32(std::uint32_t value) -> bool {
+    return write_object_view(*this, value);
+}
+auto BytesBufferView::write_uint64(std::uint64_t value) -> bool {
+    return write_object_view(*this, value);
+}
+
+auto BytesBufferView::write_string(std::string_view str) -> bool {
+    auto len = static_cast<std::uint32_t>(str.length());
+    if (!write_uint32(len))
+        return false;
+    if (offset_ + str.length() > w_span_.size())
+        return false;
+    std::memcpy(w_span_.data() + offset_, str.data(), str.length());
+    offset_ += str.length();
+    return true;
+}
+
+
+// 读取实现
+
+
+auto BytesBufferView::read_uint8() -> std::expected<std::uint8_t, std::string> {
+    return read_object_view<std::uint8_t>(*this);
+}
+auto BytesBufferView::read_uint32() -> std::expected<std::uint32_t, std::string> {
+    return read_object_view<std::uint32_t>(*this);
+}
+auto BytesBufferView::read_uint64() -> std::expected<std::uint64_t, std::string> {
+    return read_object_view<std::uint64_t>(*this);
+}
+
+auto BytesBufferView::read_string_view() -> std::expected<std::string_view, std::string> {
+    auto len_res = read_uint32();
+    if (!len_res)
+        return std::unexpected(len_res.error());
+    std::uint32_t len = *len_res;
+
+    if (offset_ + len > r_span_.size()) {
+        return std::unexpected("String read out of bounds");
     }
-    auto subspan = std::span(data_).subspan(offset_, size);
-    offset_ += size;
-    return subspan;
-}
-
-auto BytesBuffer::read_string() -> std::expected<std::string, std::string> {
-    // 先读取长度
-    auto len_span_res = read(sizeof(std::uint32_t));
-    if (!len_span_res) return std::unexpected(len_span_res.error());
-    std::uint32_t len;
-    std::memcpy(&len, len_span_res->data(), sizeof(len));
-
-    // 再读取内容
-    auto str_span_res = read(len);
-    if (!str_span_res) return std::unexpected(str_span_res.error());
-
-    return std::string(reinterpret_cast<const char*>(str_span_res->data()), str_span_res->size());
-}
-
-// --- 新的基于 std::byte 的函数实现 ---
-
-template <typename T>
-concept TriviallyCopyable = std::is_trivially_copyable_v<T>;
-
-template <TriviallyCopyable T>
-static void write_object_bytes(BytesBuffer& buf, const T& value) {
-    auto bytes = std::as_bytes(std::span{std::addressof(value), 1});
-    buf.push(bytes.data(), bytes.size());
-}
-
-template <TriviallyCopyable T>
-static auto read_object_bytes(BytesBuffer& buf) -> std::expected<T, std::string> {
-    auto bytes_res = buf.read(sizeof(T));
-    if (!bytes_res) {
-        return std::unexpected(bytes_res.error());
-    }
-    T value;
-    std::memcpy(&value, bytes_res->data(), sizeof(T));
-    return value;
-}
-
-auto write_uint8(BytesBuffer& buf, std::uint8_t value) -> std::expected<void, std::string> {
-    write_object_bytes(buf, value);
-    return {};
-}
-
-auto write_uint32(BytesBuffer& buf, std::uint32_t value) -> std::expected<void, std::string> {
-    write_object_bytes(buf, value);
-    return {};
-}
-
-auto write_uint64(BytesBuffer& buf, std::uint64_t value) -> std::expected<void, std::string> {
-    write_object_bytes(buf, value);
-    return {};
-}
-
-auto write_string(BytesBuffer& buf, std::string_view str) -> std::expected<void, std::string> {
-    buf.push_string(str);
-    return {};
-}
-
-auto read_uint8(BytesBuffer& buf) -> std::expected<std::uint8_t, std::string> {
-    return read_object_bytes<std::uint8_t>(buf);
-}
-
-auto read_uint32(BytesBuffer& buf) -> std::expected<std::uint32_t, std::string> {
-    return read_object_bytes<std::uint32_t>(buf);
-}
-
-auto read_uint64(BytesBuffer& buf) -> std::expected<std::uint64_t, std::string> {
-    return read_object_bytes<std::uint64_t>(buf);
-}
-
-auto read_string(BytesBuffer& buf) -> std::expected<std::string, std::string> {
-    return buf.read_string();
+    std::string_view str(reinterpret_cast<const char*>(r_span_.data() + offset_), len);
+    offset_ += len;
+    return str;
 }
 
 // --- CRC32 实现 ---
@@ -141,88 +112,6 @@ std::uint32_t calculate_crc32(std::span<const std::byte> data) {
         crc = (crc >> 8) ^ crc32_table.at((crc & 0xFF) ^ static_cast<std::uint8_t>(byte));
     }
     return ~crc;
-}
-
-// --- 旧的 iostream API 实现 ---
-
-template <TriviallyCopyable T>
-static void write_object_stream(std::ostream& os, const T& value) {
-    auto bytes = std::as_bytes(std::span{std::addressof(value), 1});
-    os.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-}
-
-template <TriviallyCopyable T>
-static void read_object_stream(std::istream& is, T& value) {
-    auto bytes = std::as_writable_bytes(std::span{std::addressof(value), 1});
-    is.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
-}
-
-auto write_uint8(std::ostream& os, std::uint8_t value) -> std::expected<void, std::string>{
-    os.put(static_cast<char>(value));
-    if (!os) return std::unexpected("Failed to write uint8_t to stream");
-    return {};
-}
-
-auto write_uint32(std::ostream& os, std::uint32_t value) -> std::expected<void, std::string>{
-    write_object_stream(os, value);
-    if (!os) return std::unexpected("Failed to write uint32_t to stream");
-    return {};
-}
-
-auto write_uint64(std::ostream& os, std::uint64_t value) -> std::expected<void, std::string>{
-    write_object_stream(os, value);
-    if (!os) return std::unexpected("Failed to write uint64_t to stream");
-    return {};
-}
-
-auto write_string(std::ostream& os, std::string_view str) -> std::expected<void, std::string>{
-    if (auto result = write_uint32(os, static_cast<std::uint32_t>(str.length())); !result) {
-        return std::unexpected(result.error());
-    }
-    os.write(str.data(), static_cast<std::streamsize>(str.length()));
-    if (!os) return std::unexpected("Failed to write string to stream");
-    return {};
-}
-
-auto read_uint8(std::istream& is) -> std::expected<std::uint8_t, std::string>{
-    int ch = is.get();
-    if (ch == std::istream::traits_type::eof()) {
-        return std::unexpected("Failed to read uint8_t from stream (EOF)");
-    }
-    return static_cast<std::uint8_t>(ch);
-}
-
-auto read_uint32(std::istream& is) -> std::expected<std::uint32_t, std::string>{
-    std::uint32_t value = 0;
-    read_object_stream(is, value);
-    if (!is) return std::unexpected("Failed to read uint32_t from stream");
-    return value;
-}
-
-auto read_uint64(std::istream& is) -> std::expected<std::uint64_t, std::string>{
-    std::uint64_t value = 0;
-    read_object_stream(is, value);
-    if (!is) return std::unexpected("Failed to read uint64_t from stream");
-    return value;
-}
-
-auto read_string(std::istream& is) -> std::expected<std::string, std::string>{
-    auto len_result = read_uint32(is);
-    if (!len_result) return std::unexpected(len_result.error());
-    std::uint32_t len = *len_result;
-
-    std::string str(len, '\0');
-    if (len > 0) {
-        is.read(str.data(), len);
-    }
-    if (!is) return std::unexpected("Failed to read string from stream");
-    return str;
-}
-
-// 旧的 CRC32 实现，保持兼容
-std::uint32_t calculate_crc32(const std::vector<std::uint8_t>& data) {
-    std::span<const std::byte> byte_span(reinterpret_cast<const std::byte*>(data.data()), data.size());
-    return calculate_crc32(byte_span);
 }
 
 }  // namespace kvdb::core::binary
