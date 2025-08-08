@@ -18,6 +18,9 @@ AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
     : ring_(&ring),
       wal_file_(ring, path.string() + "/wal/kvdb.wal", FileMode::ReadWrite),
       read_buffer_(READ_BUFFER_SIZE) {  // 初始化缓冲区大小
+    if (!std::filesystem::exists(path / "wal")) {
+        std::filesystem::create_directories(path / "wal");
+    }
     LOG_INFO()("AsyncWAL initialized for path: {}", path.string());
 }
 

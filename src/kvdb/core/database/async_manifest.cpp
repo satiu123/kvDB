@@ -16,6 +16,9 @@ AsyncManifestFile::AsyncManifestFile(IOUring& ring, const std::filesystem::path&
       manifest_path_(db_path / "manifest"),
       current_path_(manifest_path_ / "CURRENT"),
       manifest_file_(ring, manifest_path_.string(), FileMode::ReadWrite) {
+    if (!std::filesystem::exists(manifest_path_)) {
+        std::filesystem::create_directories(manifest_path_);
+    }
     LOG_INFO()("AsyncManifestFile initialized for path: {}", manifest_path_.string());
 }
 

@@ -10,3 +10,6 @@
 
 add_executable(async_db_example async_db_example.cpp)
 target_link_libraries(async_db_example kvdb)
+
+add_executable(performance_example performance_example.cpp)
+target_link_libraries(performance_example kvdb)

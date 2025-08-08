@@ -1,9 +1,5 @@
-module;
-
-#include <coroutine>
-
 module kvdb.core.coro.awaiter.io_awaiter;
-
+import std;
 import kvdb.core.io.io_uring;
 using kvdb::core::io::IOUring;
 void ReadAwaiter::await_suspend(std::coroutine_handle<> handle) noexcept {
