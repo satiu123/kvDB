@@ -45,6 +45,11 @@ auto IOUring::submit_write(int fd, std::span<const std::byte> buffer, std::uint6
     return WriteAwaiter{this, fd, buffer, offset};
 }
 
+// 提交nop请求
+auto IOUring::nop() -> NopAwaiter {
+    return NopAwaiter{this};
+}
+
 // 等待一个IO操作完成
 void IOUring::wait_for_completion() {
     // 提交所有待处理的请求
@@ -64,8 +69,8 @@ void IOUring::wait_for_completion() {
     io_uring_cqe_seen(static_cast<io_uring*>(ring_), cqe);
 
     // 恢复协程
-    // 这是一个简化的假设，实际场景中需要一种方式来区分awaiter类型
-    auto* awaiter = reinterpret_cast<ReadAwaiter*>(user_data);
+    // 通过基类指针安全地调用
+    auto* awaiter = reinterpret_cast<BaseAwaiter*>(user_data);
     if (awaiter) {
         awaiter->set_result(result);
         awaiter->get_handle().resume();
@@ -87,6 +92,20 @@ void IOUring::submit_read_request(int fd, std::span<std::byte> buffer, std::uint
     // 准备读操作的SQE
     io_uring_prep_read(sqe, fd, buffer.data(), buffer.size(), offset);
     // 设置用户数据，用于在完成时识别操作
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
+}
+
+void IOUring::submit_nop_request(std::uint64_t user_data) {
+    io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
+    if (!sqe) {
+        submit_requests();
+        sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
+        if (!sqe) {
+            throw std::runtime_error("Failed to get submission queue entry");
+        }
+    }
+    // 准备nop操作的SQE
+    io_uring_prep_nop(sqe);
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
 }
 

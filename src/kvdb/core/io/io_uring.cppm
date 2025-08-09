@@ -33,6 +33,9 @@ class IOUring {
     [[nodiscard]] auto submit_write(int fd, std::span<const std::byte> buffer, std::uint64_t offset)
         -> WriteAwaiter;
 
+    // 提交一个无操作请求到队列
+    [[nodiscard]] auto nop() -> NopAwaiter;
+
     // 等待并获取一个完成事件
     // 这个函数会阻塞，直到至少有一个IO操作完成
     void wait_for_completion();
@@ -42,6 +45,7 @@ class IOUring {
                              std::uint64_t user_data);
     void submit_write_request(int fd, std::span<const std::byte> buffer, std::uint64_t offset,
                               std::uint64_t user_data);
+    void submit_nop_request(std::uint64_t user_data);
 
   private:
     // 实际提交所有准备好的请求到内核

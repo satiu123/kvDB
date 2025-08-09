@@ -75,6 +75,11 @@ auto AsyncDatabase::put(std::string_view key, std::string_view value)
 
 auto AsyncDatabase::get(std::string_view key)
     -> kvdb::core::coro::Task<std::optional<std::string>> {
+    /* 仅从内存中的 MemTable 查找，这是一个同步的操作，如果没有co_await,这里会出现Adress boudary
+     * error,此处临时提交一个nop请求模拟异步
+     */
+    co_await ring_->nop();
+    ring_->submit_nop_request(0);  // 提交一个nop请求以处理IO事件
     // 目前只从 memtable 查找
     if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
         co_return it->second;

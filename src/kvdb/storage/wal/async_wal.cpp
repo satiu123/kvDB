@@ -120,7 +120,7 @@ Task<std::expected<WalRecord, std::string>> AsyncWal::async_read_next_record() {
 
     // 5. 更新状态
     buffer_pos_ += record_size;
-    co_return std::move(*record_result);
+    co_return *record_result;
 }
 
 // --- 私有辅助函数 ---

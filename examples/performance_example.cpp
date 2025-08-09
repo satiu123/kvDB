@@ -57,11 +57,24 @@ auto performance_test_main(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::T
     std::cout << "写入吞吐量: " << write_mbps << " MB/s" << std::endl;
     std::cout << "------------------------------------" << std::endl;
 
+    // for (int i = 0; i < num_operations; ++i) {
+    //     // co_await db.put(keys[i], values[i]);  // 确保数据已写入
+    //     std::cout << "验证数据: " << i << std::endl;
+    //     auto it = db.memtable_.find(keys[i]);
+    //     if (it == db.memtable_.end() || it->second != values[i]) {
+    //         std::cerr << "数据验证失败: " << keys[i] << std::endl;
+    //     }
+    // }
+
     // 异步读取性能测试
     auto start_read = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_operations; ++i) {
         // co_await db.put(keys[i], values[i]);  // 确保数据已写入
         auto value = co_await db.get(keys[i]);
+        // auto it = db.memtable_.find(keys[i]);
+        // if (it == db.memtable_.end() || it->second != values[i]) {
+        //     std::cerr << "数据验证失败: " << keys[i] << std::endl;
+        // }
     }
     auto end_read = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> read_duration = end_read - start_read;

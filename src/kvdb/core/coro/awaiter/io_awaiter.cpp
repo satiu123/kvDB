@@ -13,3 +13,8 @@ void WriteAwaiter::await_suspend(std::coroutine_handle<> handle) noexcept {
     static_cast<IOUring*>(ring_)->submit_write_request(fd_, buffer_, offset_,
                                                        reinterpret_cast<std::uint64_t>(this));
 }
+
+void NopAwaiter::await_suspend(std::coroutine_handle<> handle) noexcept {
+    handle_ = handle;
+    static_cast<IOUring*>(ring_)->submit_nop_request(reinterpret_cast<std::uint64_t>(this));
+}
