@@ -18,7 +18,7 @@ class File {
   public:
     // 构造函数：根据路径和模式打开文件
     File();
-    File(IOUring& ring, const std::string& path, FileMode mode);
+    File(IOUring& ring, std::string_view path, FileMode mode);
 
     // 析构函数：自动关闭文件描述符
     ~File();

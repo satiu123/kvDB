@@ -23,7 +23,7 @@ class BlockCache {
     explicit BlockCache(std::size_t max_size) : max_size_(max_size) {}
 
     // 尝试从缓存中获取一个已解析的块
-    auto get(const std::string& file_path, std::uint64_t offset) -> std::optional<ParsedBlock>{
+    auto get(const std::string& file_path, std::uint64_t offset) -> std::optional<ParsedBlock> {
         std::lock_guard lock(mutex_);
 
         auto it = cache_map_.find({file_path, offset});

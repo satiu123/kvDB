@@ -30,7 +30,7 @@ auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string
         co_return Manifest{};
     }
     // 1. 异步读取CURRENT文件
-    File current_file(*ring_, current_path_, FileMode::Read);
+    File current_file(*ring_, current_path_.string(), FileMode::Read);
     std::vector<std::byte> current_buffer(current_file.get_size());
     auto read_res = co_await current_file.read(current_buffer, 0);
 
@@ -40,8 +40,8 @@ auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string
     std::string manifest_filename(reinterpret_cast<char*>(current_buffer.data()), read_res);
 
     // 2. 异步读取MANIFEST文件
-    std::string manifest_path = manifest_path_ / manifest_filename;
-    File manifest_file(*ring_, manifest_path, FileMode::Read);
+    std::string manifest_path_str = (manifest_path_ / manifest_filename).string();
+    File manifest_file(*ring_, manifest_path_str, FileMode::Read);
     std::vector<std::byte> manifest_buffer(manifest_file.get_size());
     read_res = co_await manifest_file.read(manifest_buffer, 0);
     if (read_res <= 0) {
@@ -92,7 +92,7 @@ auto AsyncManifestFile::async_store(const Manifest& manifest)
     // 4. 异步更新CURRENT文件
     std::vector<std::byte> current_buffer(new_manifest_filename.size());
     std::memcpy(current_buffer.data(), new_manifest_filename.data(), new_manifest_filename.size());
-    File current_file(*ring_, current_path_, FileMode::Write);
+    File current_file(*ring_, current_path_.string(), FileMode::Write);
     write_res = co_await current_file.write(current_buffer, 0);
     if (write_res < 0) {
         co_return std::unexpected("Failed to write to CURRENT file");

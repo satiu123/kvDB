@@ -8,17 +8,34 @@ import kvdb.core.database.async_manifest;
 import kvdb.storage.wal.async_wal;
 import kvdb.storage.wal.wal_record;
 import kvdb.logging.log;
+import kvdb.storage.sstable;
 
 using kvdb::core::coro::Task;
 using kvdb::logging::LOG_ERROR;
+using kvdb::logging::LOG_INFO;
 using kvdb::storage::WalOpType;
 
 namespace kvdb::core {
 
+// Helper to extract number from sstable filename like "sstable-000001.sst"
+int get_sstable_number(const std::string& filename) {
+    auto first = filename.find_first_of("-");
+    auto last = filename.find_last_of(".");
+    if (first == std::string::npos || last == std::string::npos) {
+        return 0;
+    }
+    std::string number_str = filename.substr(first + 1, last - first - 1);
+    return std::stoi(number_str);
+}
+
 AsyncDatabase::AsyncDatabase(std::string_view base_path)
     : ring_(std::make_unique<io::IOUring>(1024)),
       wal_(std::make_unique<storage::AsyncWal>(*ring_, base_path)),
-      manifest_(std::make_unique<database::AsyncManifestFile>(*ring_, base_path)) {}
+      manifest_(std::make_unique<database::AsyncManifestFile>(*ring_, base_path)) {
+    std::filesystem::path path(base_path);
+    sstables_path_ = path / "sstables";
+    std::filesystem::create_directories(sstables_path_);
+}
 
 auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
     // 1. 异步加载 Manifest
@@ -26,81 +43,146 @@ auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
     if (manifest_data_opt) {
         manifest_data_ = std::move(manifest_data_opt.value());
     }
+
+    // 2. 加载SSTables
+    for (const auto& [level, files] : manifest_data_.sstables) {
+        for (const auto& file_path : files) {
+            auto sstable = std::make_unique<storage::SSTable>(*ring_);
+            if (co_await sstable->open(file_path)) {
+                sstables_.push_back(std::move(sstable));
+            } else {
+                LOG_ERROR()("Failed to open SSTable: {}", file_path);
+            }
+        }
+    }
+    // Sort sstables by number to ensure correct search order (newest first)
+    std::ranges::sort(sstables_, [](const auto& a, const auto& b) {
+        return get_sstable_number(a->getPath()) > get_sstable_number(b->getPath());
+    });
+
     std::uint64_t max_seq{manifest_data_.last_wal_sequence_number};
-    // 2. 定义 WAL 重放逻辑
+    // 3. 定义 WAL 重放逻辑
     auto replay_handler = [this, &max_seq](const storage::WalRecord& record) {
         switch (record.getOpType()) {
             case WalOpType::PUT:
-                memtable_[std::string(record.getKey())] = std::string(record.getValue());
+                memtable_[std::string(record.getKey())] = record.getValue();
                 break;
             case WalOpType::REMOVE:
-                memtable_.erase(std::string(record.getKey()));
+                memtable_[std::string(record.getKey())] = "";
                 break;
             case WalOpType::CLEAR:
                 memtable_.clear();
                 break;
         }
-        // 更新序列号
         max_seq = std::max(max_seq, record.getSequenceNumber());
-        return true;  // 表示处理成功，继续重放
+        return true;
     };
 
-    // 3. 异步重放 WAL
+    // 4. 异步重放 WAL
     bool replay_ok = co_await wal_->async_replay(replay_handler);
     if (!replay_ok) {
-        // 如果重放失败，可能需要处理错误，例如抛出异常或标记数据库为只读
         LOG_ERROR()("WAL replay failed. Database might be in an inconsistent state.");
-        // 此处简单地抛出异常
         throw std::runtime_error("Failed to initialize database from WAL.");
     }
 
-    // 4. 更新数据库的序列号
+    // 5. 更新数据库的序列号
     wal_->setCurrentSequenceNumber(max_seq);
 }
 
-auto AsyncDatabase::put(std::string_view key, std::string_view value)
+auto AsyncDatabase::async_put(std::string_view key, std::string_view value)
     -> kvdb::core::coro::Task<bool> {
-    // 1. 先异步写入 WAL
     bool wal_ok = co_await wal_->async_append_put(key, value);
     if (!wal_ok) {
         LOG_ERROR()("Failed to write PUT operation to WAL for key: {}", key);
-        co_return false;  // WAL 写入失败，操作失败
+        co_return false;
     }
 
-    // 2. WAL 写入成功后，再更新内存中的 MemTable
     memtable_[std::string(key)] = value;
+
+    if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
+        co_await flush_memtable_to_sstable();
+    }
 
     co_return true;
 }
 
-auto AsyncDatabase::get(std::string_view key)
+auto AsyncDatabase::async_get(std::string_view key)
     -> kvdb::core::coro::Task<std::optional<std::string>> {
-    /* 仅从内存中的 MemTable 查找，这是一个同步的操作，如果没有co_await,这里会出现Adress boudary
-     * error,此处临时提交一个nop请求模拟异步
-     */
-    co_await ring_->nop();
-    ring_->submit_nop_request(0);  // 提交一个nop请求以处理IO事件
-    // 目前只从 memtable 查找
     if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
         co_return it->second;
     }
-    // TODO: 后续需要从 SSTable 中查找
+
+    if (immutable_memtable_) {
+        if (auto it = immutable_memtable_->find(std::string(key));
+            it != immutable_memtable_->end()) {
+            co_return it->second;
+        }
+    }
+
+    for (const auto& sstable : sstables_) {
+        auto val = co_await sstable->find(key);
+        if (val) {
+            co_return val;
+        }
+    }
+
     co_return std::nullopt;
 }
 
-auto AsyncDatabase::remove(std::string_view key) -> kvdb::core::coro::Task<bool> {
-    // 1. 先异步写入 WAL
+
+auto AsyncDatabase::async_remove(std::string_view key) -> kvdb::core::coro::Task<bool> {
+    auto exists = co_await async_get(key);
+    if (!exists) {
+        LOG_INFO()("Key not found for removal: {}", key);
+        co_return false;  // 如果键不存在，直接返回false
+    }
     bool wal_ok = co_await wal_->async_append_remove(key);
     if (!wal_ok) {
         LOG_ERROR()("Failed to write REMOVE operation to WAL for key: {}", key);
-        co_return false;  // WAL 写入失败，操作失败
+        co_return false;
+    }
+    memtable_[std::string(key)] = "";            // 标记为删除
+    if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
+        co_await flush_memtable_to_sstable();
+    }
+    co_return true;
+}
+
+Task<void> AsyncDatabase::flush_memtable_to_sstable() {
+    immutable_memtable_ = std::make_unique<std::map<std::string, std::string, std::less<>>>();
+    std::swap(memtable_, *immutable_memtable_);
+
+    // 1. Generate new sstable filename
+    int max_sstable_num = 0;
+    if (!sstables_.empty()) {
+        max_sstable_num = get_sstable_number(sstables_.front()->getPath());
+    }
+    std::filesystem::path sstable_path = sstables_path_;
+    sstable_path /= std::format("sstable-{:06d}.sst", max_sstable_num + 1);
+
+    // 2. Build SSTable from immutable memtable
+    bool build_ok =
+        co_await storage::SSTable::buildFrom(*ring_, sstable_path.string(), *immutable_memtable_);
+
+    if (build_ok) {
+        // 3. Add new sstable to manifest and sstable list
+        auto new_sstable = std::make_unique<storage::SSTable>(*ring_);
+        co_await new_sstable->open(sstable_path.string());
+        sstables_.insert(sstables_.begin(), std::move(new_sstable));  // Add to front (newest)
+
+        manifest_data_.sstables[0].push_back(sstable_path.string());
+        manifest_data_.last_wal_sequence_number = wal_->getLastSequenceNumber();
+        auto store_result = co_await manifest_->async_store(manifest_data_);
+        if (!store_result) {
+            LOG_ERROR()("Failed to save manifest: {}", store_result.error());
+        }
+    } else {
+        LOG_ERROR()("Failed to build SSTable: {}", sstable_path.string());
     }
 
-    // 2. WAL 写入成功后，再从内存中的 MemTable 中删除
-    auto num_erased = memtable_.erase(std::string(key));
-
-    co_return num_erased > 0;
+    immutable_memtable_.reset();
 }
+
 Task<void> AsyncDatabase::printWALRecords() const {
     auto records = co_await wal_->getFormattedContent();
     if (records) {
@@ -114,16 +196,17 @@ Task<void> AsyncDatabase::printWALRecords() const {
     co_return;
 }
 
-// void AsyncDatabase::printSSTables() const {
-//     std::cout << "--- SSTables Content ---" << std::endl;
-//     for (const auto& sstable : sstables_) {
-//         std::cout << "SSTable: " << sstable->getPath() << std::endl;
-//         auto all_data = sstable->readAll();
-//         for (const auto& [key, value] : all_data) {
-//             std::cout << "  " << key << ": " << value << std::endl;
-//         }
-//     }
-// }
+Task<void> AsyncDatabase::printSSTables() const {
+    std::cout << "--- SSTables Content ---" << std::endl;
+    for (const auto& sstable : sstables_) {
+        auto sstable_map = co_await sstable->readAll();
+        std::println("SSTable：{}", sstable->getPath());
+        for (const auto& [k, v] : sstable_map) {
+            std::println("  {}：{}", k, v);
+        }
+    }
+}
+
 void AsyncDatabase::printManifest() const {
     std::cout << "--- Manifest Content ---" << std::endl;
     std::cout << "Last WAL Sequence Number: " << manifest_data_.last_wal_sequence_number
@@ -136,4 +219,5 @@ void AsyncDatabase::printManifest() const {
         }
     }
 }
+
 }  // namespace kvdb::core

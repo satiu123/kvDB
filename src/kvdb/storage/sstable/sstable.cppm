@@ -3,7 +3,14 @@ export module kvdb.storage.sstable;
 import std;
 
 import kvdb.storage.bloom_filter;
+import kvdb.core.coro.task;
+import kvdb.core.io.file;
+import kvdb.core.io.io_uring;
 
+
+using kvdb::core::coro::Task;
+using kvdb::core::io::File;
+using kvdb::core::io::IOUring;
 export namespace kvdb::storage {
 
 // 用于文件验证的魔数
@@ -19,17 +26,21 @@ struct Footer {
 
 class SSTable {
   public:
+    explicit SSTable(IOUring& ring);
     class Builder {
       public:
-        explicit Builder(std::string_view path, std::size_t block_size_threshold = 4096);
+        explicit Builder(IOUring& ring, std::string_view path,
+                         std::size_t block_size_threshold = 4096);
 
-        void add(std::string_view key, std::string_view value);
-        bool finish(const std::map<std::string, std::string, std::less<>>& data);
+        Task<void> add(std::string_view key, std::string_view value);
+        Task<bool> finish(const std::map<std::string, std::string, std::less<>>& data);
 
       private:
-        void writeBlock();
+        Task<void> writeBlock();
 
-        std::ofstream file_;
+        // std::ofstream file_;
+        IOUring& ring_;
+        File out_file_;
         std::string path_;
         std::size_t block_size_threshold_;
 
@@ -45,12 +56,13 @@ class SSTable {
     };
 
     // 从map构建SSTable的静态函数
-    static bool buildFrom(std::string_view path, const std::map<std::string, std::string, std::less<>>& data);
+    static Task<bool> buildFrom(IOUring& ring, std::string_view path,
+                                const std::map<std::string, std::string, std::less<>>& data);
 
     // 用于读取的成员函数
-    bool open(std::string_view path);
-    auto find(std::string_view key) -> std::optional<std::string>;
-    auto readAll() -> std::map<std::string, std::string>;
+    Task<bool> open(std::string_view path);
+    Task<std::optional<std::string>> find(std::string_view key);
+    Task<std::map<std::string, std::string>> readAll();
     const std::string& getPath() const {
         return path_;
     }
@@ -61,10 +73,12 @@ class SSTable {
         std::uint64_t offset;
         std::uint64_t size;
     };
-    bool loadIndex();
-    bool loadBloomFilter();
+    Task<bool> loadIndex();
+    Task<bool> loadBloomFilter();
 
-    std::ifstream file_;
+    // std::ifstream file_;
+    IOUring& ring_;
+    File in_file_;
     std::string path_;
     Footer footer_;
     std::vector<IndexRecord> index_;

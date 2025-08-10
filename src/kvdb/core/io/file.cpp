@@ -14,7 +14,7 @@ import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
 
 namespace kvdb::core::io {
-File::File(IOUring& ring, const std::string& path, FileMode mode)
+File::File(IOUring& ring, std::string_view path, FileMode mode)
     : ring_(&ring), path_(path), mode_(mode) {}
 
 File::File() : ring_(nullptr), mode_(FileMode::Read) {}
