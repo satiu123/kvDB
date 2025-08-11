@@ -2,6 +2,7 @@
 import std;
 import kvdb.core;
 import kvdb.core.coro.task;
+import kvdb.logging;
 
 // 辅助函数：生成指定长度的随机字符串
 std::string generate_random_string(std::size_t length) {
@@ -82,6 +83,8 @@ int main() {
     std::filesystem::remove_all(db_path);
 
     kvdb::core::AsyncDatabase db(db_path);
+    auto& logger = kvdb::logging::Logger::getInstance();
+    logger.addSink(*kvdb::logging::FileSink::create(db_path));
     // std::filesystem::create_directories(db_path);
     // 运行异步压力测试
     db.run(performance_test_main(db));

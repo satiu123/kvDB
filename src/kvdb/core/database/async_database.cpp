@@ -11,6 +11,7 @@ import kvdb.logging.log;
 import kvdb.storage.sstable;
 
 using kvdb::core::coro::Task;
+using kvdb::logging::LOG_DEBUG;
 using kvdb::logging::LOG_ERROR;
 using kvdb::logging::LOG_INFO;
 using kvdb::storage::WalOpType;
@@ -98,7 +99,7 @@ auto AsyncDatabase::async_put(std::string_view key, std::string_view value)
     }
 
     memtable_[std::string(key)] = value;
-
+    LOG_DEBUG()("Put key: {}, value: {}", key, value);
     if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
         co_await flush_memtable_to_sstable();
     }
@@ -109,12 +110,14 @@ auto AsyncDatabase::async_put(std::string_view key, std::string_view value)
 auto AsyncDatabase::async_get(std::string_view key)
     -> kvdb::core::coro::Task<std::optional<std::string>> {
     if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
+        LOG_DEBUG()("Found in memtable: key: {}, value: {}", key, it->second);
         co_return it->second;
     }
 
     if (immutable_memtable_) {
         if (auto it = immutable_memtable_->find(std::string(key));
             it != immutable_memtable_->end()) {
+            LOG_DEBUG()("Found in immutable memtable: key: {}, value: {}", key, it->second);
             co_return it->second;
         }
     }
@@ -122,10 +125,11 @@ auto AsyncDatabase::async_get(std::string_view key)
     for (const auto& sstable : sstables_) {
         auto val = co_await sstable->find(key);
         if (val) {
+            LOG_DEBUG()("Found in SSTable: key: {}, value: {}", key, *val);
             co_return val;
         }
     }
-
+    LOG_DEBUG()("Key not found: {}", key);
     co_return std::nullopt;
 }
 
@@ -133,7 +137,7 @@ auto AsyncDatabase::async_get(std::string_view key)
 auto AsyncDatabase::async_remove(std::string_view key) -> kvdb::core::coro::Task<bool> {
     auto exists = co_await async_get(key);
     if (!exists) {
-        LOG_INFO()("Key not found for removal: {}", key);
+        LOG_DEBUG()("Key not found for removal: {}", key);
         co_return false;  // 如果键不存在，直接返回false
     }
     bool wal_ok = co_await wal_->async_append_remove(key);
@@ -141,7 +145,8 @@ auto AsyncDatabase::async_remove(std::string_view key) -> kvdb::core::coro::Task
         LOG_ERROR()("Failed to write REMOVE operation to WAL for key: {}", key);
         co_return false;
     }
-    memtable_[std::string(key)] = "";            // 标记为删除
+    memtable_[std::string(key)] = "";  // 标记为删除
+    LOG_DEBUG()("Removed key: {}", key);
     if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
         co_await flush_memtable_to_sstable();
     }

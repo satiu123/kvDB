@@ -92,7 +92,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
     co_await out_file_.write(
         std::as_bytes(std::span{reinterpret_cast<char*>(&footer), sizeof(footer)}), offset_);
 
-    LOG_INFO()("SSTable '{}' 成功完成。", path_);
+    LOG_INFO()("SSTable '{}' 创建成功完成。", path_);
     co_return true;
 }
 
@@ -235,13 +235,13 @@ Task<std::map<std::string, std::string>> SSTable::readAll() {
     std::map<std::string, std::string> data;
     for (const auto& index_record : index_) {
         std::string block_data(index_record.size, '\0');
-        auto bytes_read = co_await in_file_.read(
-            std::as_writable_bytes(std::span{block_data}), index_record.offset);
+        auto bytes_read = co_await in_file_.read(std::as_writable_bytes(std::span{block_data}),
+                                                 index_record.offset);
 
         if (static_cast<std::uint64_t>(bytes_read) != index_record.size) {
             // Handle error: maybe log and continue, or throw an exception
             LOG_INFO()("Error reading block for SSTable {}", path_);
-            continue; // Skip this block
+            continue;  // Skip this block
         }
 
         BytesBufferView view(std::as_bytes(std::span{block_data}));

@@ -23,24 +23,34 @@ class Logger {
   private:
     Logger();
     ~Logger();
+
+    void worker_loop();
+
+    std::atomic<bool> done_{false};
     std::vector<std::shared_ptr<LogSink>> sinks_;
-    LogLevel level_ = LogLevel::DEBUG;
-    mutable std::mutex mutex_;  // 注意：shouldLog 是 const 函数，所以 mutex_ 需要是 mutable
+    LogLevel level_ = LogLevel::INFO;
+
+    std::queue<LogRecord> queue_;
+    mutable std::mutex sinks_mutex_;
+    mutable std::mutex queue_mutex_;
+    std::condition_variable cv_;
+    std::jthread worker_thread_;
 };
 
-// 模板函数的实现需要放在头文件中
+// 模板函数的实现需要放在模块接口文件中
 template <typename... Args>
 void Logger::log(LogLevel level, const std::source_location& loc,
                  const std::format_string<Args...>& fmt, Args&&... args) {
-    // LogRecord 的创建可以放到锁外，格式化消息是耗时操作
+    // LogRecord 的创建和消息格式化是主要耗时操作，在锁外执行
     LogRecord record(level, std::chrono::system_clock::now(),
                      std::vformat(fmt.get(), std::make_format_args(args...)), loc.file_name(),
                      static_cast<int>(loc.line()));
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto& sink : sinks_) {
-        sink->log(record);
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        queue_.push(std::move(record));
     }
+    cv_.notify_one();
 }
 
 }  // namespace kvdb::logging

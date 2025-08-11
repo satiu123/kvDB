@@ -7,7 +7,7 @@ namespace kvdb::logging {
 auto FileSink::create(std::string_view filePath)
     -> std::expected<std::shared_ptr<FileSink>, std::string> {
     // 使用 new FileSink(filePath) 因为构造函数是私有的
-    auto sink = std::shared_ptr<FileSink>(new FileSink(filePath));
+    auto sink = std::shared_ptr<FileSink>(new FileSink(std::string(filePath) + "/kvdb.log"));
     if (sink->open()) {
         return sink;
     }

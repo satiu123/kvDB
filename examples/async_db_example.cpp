@@ -2,6 +2,7 @@ import std;
 
 import kvdb.core;
 import kvdb.core.coro.task;
+import kvdb.logging;
 
 // 定义一个异步任务，用于测试数据库功能
 auto test_async_db(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::Task<void> {
@@ -42,10 +43,14 @@ int main() {
     // 创建 AsyncDatabase 实例
     // IOUring 和事件循环现在被封装在内部
     kvdb::core::AsyncDatabase db(db_path);
-
+    auto& logger = kvdb::logging::Logger::getInstance();
+    logger.setLevel(kvdb::logging::LogLevel::DEBUG);
+    logger.addSink(std::make_shared<kvdb::logging::ConsoleSink>());
+    logger.addSink(*kvdb::logging::FileSink::create(db_path));
     // 使用 db.run 来执行整个异步任务
     // 用户不再需要关心协程调度
     db.run(test_async_db(db));
+
 
     return 0;
 }

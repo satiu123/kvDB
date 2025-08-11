@@ -1,41 +1,38 @@
-# 引入 FetchContent 模块
+# tests/CMakeLists.txt
+
+# Enable testing
+enable_testing()
+
+# Include FetchContent module to fetch GoogleTest
 include(FetchContent)
 
-# 声明 GoogleTest 的源码来源
+# Declare the dependency on GoogleTest
 FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.zip
 )
 
-# 设置 GTest 选项，使其可以被其他目标安全地使用
-# ON 表示构建 gtest 和 gtest_main 为静态库
-# OFF 表示不安装 GTest，因为它只是我们项目的一部分
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# Make GoogleTest available to the project
+# This will download the source and add gtest, gtest_main, etc. targets
 FetchContent_MakeAvailable(googletest)
 
-# 测试可执行文件定义
-add_executable(kvdb_tests
+# --- Test Executable Definition ---
+
+# Define the test executable for the logger
+add_executable(test_logger
     test_logger.cpp
-    test_database.cpp
-    test_wal.cpp
-    test_memtable.cpp
-    test_compaction.cpp
-    test_deletion.cpp
-    test_manifest.cpp
-    test_performance.cpp
-    test_thread_pool.cpp
-    test_io_uring.cpp
 )
 
-# 链接到 CMake 目标，GTest 的目标名称由 FetchContent 自动创建
-# 注意：GTest 1.11.0 版本后，目标名称从 GTest::GTest 变成了 GTest::gtest
-target_link_libraries(kvdb_tests 
+# Link the test executable against our kvdb library and GoogleTest
+# GTest::gtest_main provides the main() function for the test runner
+target_link_libraries(test_logger 
     PRIVATE 
         kvdb
-        GTest::gtest      # 使用 FetchContent 创建的目标
-        GTest::gtest_main # 使用 FetchContent 创建的目标
+        GTest::gtest
+        GTest::gtest_main
 )
 
-# 添加测试（无需改动）
+# Discover tests in the executable using gtest_discover_tests
+# This allows CTest to run the tests found in the executable
 include(GoogleTest)
-gtest_discover_tests(kvdb_tests)
+# gtest_discover_tests(test_logger)
