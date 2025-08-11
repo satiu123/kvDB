@@ -4,7 +4,74 @@ import std;
 
 namespace kvdb::core::binary {
 
-// 从 wal_record.cpp 迁移过来的 CRC32 校验和表
+// --- BytesBuffer (拥有所有权) ---
+
+void BytesBuffer::push(const std::byte* bytes, std::size_t size) {
+    data_.insert(data_.end(), bytes, bytes + size);
+}
+
+void BytesBuffer::push_string(std::string_view str) {
+    auto len = static_cast<std::uint32_t>(str.length());
+    push(reinterpret_cast<const std::byte*>(&len), sizeof(len));
+    push(reinterpret_cast<const std::byte*>(str.data()), str.length());
+}
+
+// --- BytesBufferView (非拥有所有权) ---
+
+// 写入实现
+
+
+auto BytesBufferView::write_uint8(std::uint8_t value) -> bool {
+    return write_object_view(*this, value);
+}
+auto BytesBufferView::write_uint32(std::uint32_t value) -> bool {
+    return write_object_view(*this, value);
+}
+auto BytesBufferView::write_uint64(std::uint64_t value) -> bool {
+    return write_object_view(*this, value);
+}
+
+auto BytesBufferView::write_string(std::string_view str) -> bool {
+    auto len = static_cast<std::uint32_t>(str.length());
+    if (!write_uint32(len))
+        return false;
+    if (offset_ + str.length() > w_span_.size())
+        return false;
+    std::memcpy(w_span_.data() + offset_, str.data(), str.length());
+    offset_ += str.length();
+    return true;
+}
+
+
+// 读取实现
+
+
+auto BytesBufferView::read_uint8() -> std::expected<std::uint8_t, std::string> {
+    return read_object_view<std::uint8_t>(*this);
+}
+auto BytesBufferView::read_uint32() -> std::expected<std::uint32_t, std::string> {
+    return read_object_view<std::uint32_t>(*this);
+}
+auto BytesBufferView::read_uint64() -> std::expected<std::uint64_t, std::string> {
+    return read_object_view<std::uint64_t>(*this);
+}
+
+auto BytesBufferView::read_string_view() -> std::expected<std::string_view, std::string> {
+    auto len_res = read_uint32();
+    if (!len_res)
+        return std::unexpected(len_res.error());
+    std::uint32_t len = *len_res;
+
+    if (offset_ + len > r_span_.size()) {
+        return std::unexpected("字符串读取越界");
+    }
+    std::string_view str(reinterpret_cast<const char*>(r_span_.data() + offset_), len);
+    offset_ += len;
+    return str;
+}
+
+// --- CRC32 实现 ---
+
 static constexpr std::array<std::uint32_t, 256> crc32_table = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 0xe963a535, 0x9e6495a3,
     0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988, 0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91,
@@ -39,118 +106,10 @@ static constexpr std::array<std::uint32_t, 256> crc32_table = {
     0xbdbdf21c, 0xcabac28a, 0x53b39330, 0x24b4a3a6, 0xbad03605, 0xcdd70693, 0x54de5729, 0x23d967bf,
     0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94, 0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
 
-// 辅助函数，用于向流中写入可平凡复制(TriviallyCopyable)的对象
-// 使用 std::as_bytes (C++20) 来安全地获取对象的字节视图
-// reinterpret_cast 在这里是必要的，因为 iostream 的接口使用 char* 而不是 std::byte*
-// 这是 reinterpret_cast 的一个明确且定义良好的用例
-template <typename T>
-concept TriviallyCopyable = std::is_trivially_copyable_v<T>;
-
-template <TriviallyCopyable T>
-static void write_object(std::ostream& os, const T& value) {
-    auto bytes = std::as_bytes(std::span{std::addressof(value), 1});
-    os.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-}
-
-// 辅助函数，用于从流中读取数据到可平凡复制(TriviallyCopyable)的对象
-template <TriviallyCopyable T>
-static void read_object(std::istream& is, T& value) {
-    auto bytes = std::as_writable_bytes(std::span{std::addressof(value), 1});
-    is.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
-}
-
-std::expected<void, std::string> write_uint8(std::ostream& os, std::uint8_t value) {
-    // 对于单个字节，使用 put() 是最符合语义且最安全的方式
-    os.put(static_cast<char>(value));
-    if (!os) {
-        return std::unexpected("Failed to write uint8_t to stream");
-    }
-    return {};
-}
-
-std::expected<void, std::string> write_uint32(std::ostream& os, std::uint32_t value) {
-    // 对于多字节整数，直接写入其内存表示
-    write_object(os, value);
-    if (!os) {
-        return std::unexpected("Failed to write uint32_t to stream");
-    }
-    return {};
-}
-
-std::expected<void, std::string> write_uint64(std::ostream& os, std::uint64_t value) {
-    // 对于多字节整数，直接写入其内存表示
-    write_object(os, value);
-    if (!os) {
-        return std::unexpected("Failed to write uint64_t to stream");
-    }
-    return {};
-}
-
-std::expected<void, std::string> write_string(std::ostream& os, std::string_view str) {
-    // 首先，以 uint32 格式写入字符串的长度
-    if (auto result = write_uint32(os, static_cast<std::uint32_t>(str.length())); !result) {
-        return std::unexpected(result.error());
-    }
-    // 然后，写入字符串的实际内容
-    os.write(str.data(), static_cast<std::streamsize>(str.length()));
-    if (!os) {
-        return std::unexpected("Failed to write string to stream");
-    }
-    return {};
-}
-
-std::expected<std::uint8_t, std::string> read_uint8(std::istream& is) {
-    // 对于单个字节，使用 get() 是最符合语义的方式
-    int ch = is.get();
-    if (ch == std::istream::traits_type::eof()) {
-        return std::unexpected("Failed to read uint8_t from stream (EOF)");
-    }
-    return static_cast<std::uint8_t>(ch);
-}
-
-std::expected<std::uint32_t, std::string> read_uint32(std::istream& is) {
-    std::uint32_t value = 0;
-    read_object(is, value);
-    if (!is) {
-        return std::unexpected("Failed to read uint32_t from stream");
-    }
-    return value;
-}
-
-std::expected<std::uint64_t, std::string> read_uint64(std::istream& is) {
-    std::uint64_t value = 0;
-    read_object(is, value);
-    if (!is) {
-        return std::unexpected("Failed to read uint64_t from stream");
-    }
-    return value;
-}
-
-std::expected<std::string, std::string> read_string(std::istream& is) {
-    // 首先读取字符串长度
-    auto len_result = read_uint32(is);
-    if (!len_result) {
-        return std::unexpected(len_result.error());
-    }
-    std::uint32_t len = *len_result;
-
-    // 根据长度读取字符串内容
-    std::string str(len, '\0');
-    // 直接读入 std::string 的内部缓冲区在 C++17 及以后是安全的
-    // 因为 string::data() 返回一个非 const 的指针
-    if (len > 0) {
-        is.read(str.data(), len);
-    }
-    if (!is) {
-        return std::unexpected("Failed to read string from stream");
-    }
-    return str;
-}
-
-std::uint32_t calculate_crc32(const std::vector<std::uint8_t>& data) {
+std::uint32_t calculate_crc32(std::span<const std::byte> data) {
     std::uint32_t crc = 0xFFFFFFFF;
-    for (std::uint8_t byte : data) {
-        crc = (crc >> 8) ^ crc32_table.at((crc & 0xFF) ^ byte);
+    for (std::byte byte : data) {
+        crc = (crc >> 8) ^ crc32_table.at((crc & 0xFF) ^ static_cast<std::uint8_t>(byte));
     }
     return ~crc;
 }

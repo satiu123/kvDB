@@ -1,118 +1,213 @@
 export module kvdb.core.coro.task;
+
 import std;
 
-
 export namespace kvdb::core::coro {
+
+// 导出 Task 类，用于 C++20 协程
 template <typename T>
-class Task {
+class [[nodiscard]] Task {
   public:
+    // promise_type 结构体
     struct promise_type {
-        Task<T> get_return_object() {
+        Task get_return_object() {
             return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
         }
-
-        std::suspend_never initial_suspend() noexcept {
+        std::suspend_always initial_suspend() noexcept {
             return {};
         }
-
-        std::suspend_always final_suspend() noexcept {
-            return {};
+        auto final_suspend() noexcept {
+            struct awaiter {
+                bool await_ready() noexcept {
+                    return false;
+                }
+                std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<promise_type> h) noexcept {
+                    auto continuation = h.promise().continuation;
+                    if (continuation) {
+                        return continuation;
+                    }
+                    return std::noop_coroutine();
+                }
+                void await_resume() noexcept {}
+            };
+            return awaiter{};
         }
-
-        template <typename U>
-        void return_value(U&& value) {
-            result_ = std::forward<U>(value);
+        void return_value(T value) {
+            this->value.emplace(std::move(value));
         }
-
         void unhandled_exception() {
-            exception_ = std::current_exception();
+            std::terminate();
         }
 
-        T& result() {
-            if (exception_) {
-                std::rethrow_exception(exception_);
-            }
-            return result_;
-        }
-
-      private:
-        T result_;
-        std::exception_ptr exception_;
+        std::optional<T> value;
+        std::coroutine_handle<> continuation = nullptr;
     };
 
+    // 构造函数
     explicit Task(std::coroutine_handle<promise_type> handle) : handle_(handle) {}
 
-    Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {}
-
+    // 析构函数
     ~Task() {
         if (handle_) {
             handle_.destroy();
         }
     }
 
-    T result() {
-        return handle_.promise().result();
+    // 禁止拷贝
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+
+    // 允许移动
+    Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
+    Task& operator=(Task&& other) noexcept {
+        if (this != &other) {
+            if (handle_) {
+                handle_.destroy();
+            }
+            handle_ = std::exchange(other.handle_, {});
+        }
+        return *this;
     }
 
+    auto operator co_await() noexcept {
+        struct awaiter {
+            std::coroutine_handle<promise_type> handle_;
+
+            bool await_ready() const noexcept {
+                return !handle_ || handle_.done();
+            }
+
+            void await_suspend(std::coroutine_handle<> awaiting_handle) noexcept {
+                handle_.promise().continuation = awaiting_handle;
+                handle_.resume();
+            }
+
+            T await_resume() noexcept {
+                return std::move(*handle_.promise().value);
+            }
+        };
+        return awaiter{handle_};
+    }
+
+    // 检查协程是否完成
     bool done() const {
-        return handle_.done();
+        return !handle_ || handle_.done();
+    }
+
+    // 恢复协程执行
+    void resume() {
+        if (handle_ && !handle_.done()) {
+            handle_.resume();
+        }
+    }
+
+    // 获取结果
+    T get() {
+        return std::move(*handle_.promise().value);
     }
 
   private:
     std::coroutine_handle<promise_type> handle_;
 };
 
+// Task<void> 的特化
 template <>
-class Task<void> {
+class [[nodiscard]] Task<void> {
   public:
+    // promise_type 结构体
     struct promise_type {
-        Task<void> get_return_object() {
+        Task get_return_object() {
             return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
         }
-
-        std::suspend_never initial_suspend() noexcept {
+        std::suspend_always initial_suspend() noexcept {
             return {};
         }
-
-        std::suspend_always final_suspend() noexcept {
-            return {};
+        auto final_suspend() noexcept {
+            struct awaiter {
+                bool await_ready() noexcept {
+                    return false;
+                }
+                std::coroutine_handle<> await_suspend(
+                    std::coroutine_handle<promise_type> h) noexcept {
+                    auto continuation = h.promise().continuation;
+                    if (continuation) {
+                        return continuation;
+                    }
+                    return std::noop_coroutine();
+                }
+                void await_resume() noexcept {}
+            };
+            return awaiter{};
         }
-
         void return_void() {}
-
         void unhandled_exception() {
-            exception_ = std::current_exception();
+            std::terminate();
         }
-
-        void result() {
-            if (exception_) {
-                std::rethrow_exception(exception_);
-            }
-        }
-
-      private:
-        std::exception_ptr exception_;
+        std::coroutine_handle<> continuation = nullptr;
     };
 
+    // 构造函数
     explicit Task(std::coroutine_handle<promise_type> handle) : handle_(handle) {}
 
-    Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, nullptr)) {}
-
+    // 析构函数
     ~Task() {
         if (handle_) {
             handle_.destroy();
         }
     }
 
-    void result() {
-        handle_.promise().result();
+    // 禁止拷贝
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+
+    // 允许移动
+    Task(Task&& other) noexcept : handle_(std::exchange(other.handle_, {})) {}
+    Task& operator=(Task&& other) noexcept {
+        if (this != &other) {
+            if (handle_) {
+                handle_.destroy();
+            }
+            handle_ = std::exchange(other.handle_, {});
+        }
+        return *this;
     }
 
-    bool done() const {
-        return handle_.done();
+    auto operator co_await() noexcept {
+        struct awaiter {
+            std::coroutine_handle<promise_type> handle_;
+
+            bool await_ready() const noexcept {
+                return !handle_ || handle_.done();
+            }
+
+            void await_suspend(std::coroutine_handle<> awaiting_handle) noexcept {
+                handle_.promise().continuation = awaiting_handle;
+                handle_.resume();
+            }
+
+            void await_resume() noexcept {}
+        };
+        return awaiter{handle_};
     }
+
+    // 检查协程是否完成
+    bool done() const {
+        return !handle_ || handle_.done();
+    }
+
+    // 恢复协程执行
+    void resume() {
+        if (handle_ && !handle_.done()) {
+            handle_.resume();
+        }
+    }
+
+    // 获取结果 (void)
+    void get() {}
 
   private:
     std::coroutine_handle<promise_type> handle_;
 };
 }  // namespace kvdb::core::coro
+

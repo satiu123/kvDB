@@ -1,11 +1,17 @@
-add_executable(simple_example simple_example.cpp)
-target_link_libraries(simple_example kvdb)
+cmake_minimum_required(VERSION 3.28)
 
-add_executable(structure_test structure_test.cpp)
-target_link_libraries(structure_test kvdb)
+# Get all cpp files in current directory
+file(GLOB CPP_FILES "*.cpp")
 
-add_executable(coro_test coro_test.cpp)
-target_link_libraries(coro_test kvdb)
+# Create executable target for each cpp file
+foreach(CPP_FILE ${CPP_FILES})
+    # Get filename without extension
+    get_filename_component(TARGET_NAME ${CPP_FILE} NAME_WE)
+    
+    # Create executable target
+    add_executable(${TARGET_NAME} ${CPP_FILE})
+    
+    # Optional: link libraries if needed
+    target_link_libraries(${TARGET_NAME} kvdb)
+endforeach()
 
-add_executable(tp_test tp_test.cpp)
-target_link_libraries(tp_test kvdb)

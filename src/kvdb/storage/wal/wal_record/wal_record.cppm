@@ -1,7 +1,7 @@
 export module kvdb.storage.wal.wal_record;
 
-
 import std;
+
 export namespace kvdb::storage {
 
 // WAL记录操作类型
@@ -12,27 +12,26 @@ enum class WalOpType : std::uint8_t {
 };
 
 /**
- * @brief WAL记录类，表示一个预写日志记录
+ * @brief WAL记录类，表示一个预写日志记录 (零拷贝视图版本)
  *
- * 该类表示一个WAL记录，用于持久化数据库操作
- * 支持序列化到二进制格式和从二进制格式反序列化
+ * 该类是一个轻量级视图，它不拥有key和value的数据，而是引用外部缓冲区。
+ * 调用者必须保证WalRecord的生命周期短于其引用的数据缓冲区。
  */
 class WalRecord {
   public:
-    // 构造函数
-    explicit WalRecord(WalOpType op_type, std::string_view key = "", std::string_view value = "",
-                       std::uint64_t sequence_number = 0);
+    // 构造函数 - 用于创建准备序列化的记录
+    explicit WalRecord(WalOpType op_type, std::string_view key, std::string_view value,
+                       std::uint64_t sequence_number);
 
-    // 从二进制数据反序列化一条记录
-    static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
-        const std::vector<std::uint8_t>& data);
-    static std::expected<std::unique_ptr<WalRecord>, std::string> deserialize(
-        const std::uint8_t* data, std::size_t size);
+    // 从二进制数据反序列化一条记录，返回一个视图化的WalRecord
+    static auto deserialize(std::span<const std::byte> data)
+        -> std::expected<WalRecord, std::string>;
 
-    // 序列化记录为二进制数据
-    std::vector<std::uint8_t> serialize() const;
+    // 序列化记录到给定的缓冲区
+    auto serialize_to(std::span<std::byte> target_buffer) const
+        -> std::expected<std::size_t, std::string>;
 
-    // 获取记录大小（序列化后）
+    // 获取记录序列化后所需的总大小
     std::size_t size() const;
 
     // 访问器
@@ -48,23 +47,23 @@ class WalRecord {
     std::uint64_t getSequenceNumber() const {
         return sequence_number_;
     }
+    std::uint32_t getChecksum() const {
+        return checksum_;
+    }
 
-    /*
-     * @brief 获取记录的字符串表示
-     * @return 格式化的字符串表示
-     */
+    // 获取记录的字符串表示
     std::string toString() const;
 
-    // 计算记录校验和
-    std::uint32_t calculateChecksum() const;
-    bool validateChecksum() const;
-
   private:
-    WalOpType op_type_;              // 操作类型
-    std::string key_;                // 键
-    std::string value_;              // 值（仅用于PUT操作）
-    std::uint32_t checksum_;         // 校验和，用于验证记录完整性
-    std::uint64_t sequence_number_;  // 序列号，用于记录顺序
+    // 私有构造函数，用于反序列化
+    explicit WalRecord(WalOpType op_type, std::string_view key, std::string_view value,
+                       std::uint64_t sequence_number, std::uint32_t checksum);
+
+    WalOpType op_type_;
+    std::string_view key_;
+    std::string_view value_;
+    std::uint64_t sequence_number_;
+    std::uint32_t checksum_;
 };
 
 }  // namespace kvdb::storage

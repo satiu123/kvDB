@@ -12,7 +12,7 @@ find_library(CXX_LIBRARIES c++)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(STATUS "Using Clang compiler")
     add_compile_definitions(-D_LIBCPP_REMOVE_TRANSITIVE_INCLUDES)
-    add_compile_options(-fdiagnostics-color -pedantic-errors -Wall -Wextra -Wdeprecated 
+    add_compile_options(-fdiagnostics-color -pedantic-errors -Wall -Wextra -Wdeprecated
                         -fexperimental-library -stdlib=libc++)
     add_link_options(-fuse-ld=lld -stdlib=libc++ -Wl,--color-diagnostics -fdiagnostics-color
                         -fexperimental-library)
@@ -24,7 +24,7 @@ endif()
 # 如果使用GCC编译器
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(STATUS "Using GCC compiler")
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)  
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
     set(MOD_BASE_DIR /usr/include/c++/${CMAKE_CXX_COMPILER_VERSION}/bits)
     set(STD_MODULE_FILE ${MOD_BASE_DIR}/std.cc)
@@ -32,9 +32,9 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 
-
-add_library(std-cxx-modules STATIC)
-target_sources(std-cxx-modules 
+# add_definitions(-w)
+add_library(std-cxx-modules SHARED)
+target_sources(std-cxx-modules
   PUBLIC
     FILE_SET moduleStd
     TYPE CXX_MODULES
@@ -53,7 +53,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # 添加子目录
 add_subdirectory(src)
 
-#启用测试
+# 启用测试
 option(BUILD_TESTS "Build tests" ON)
 if(BUILD_TESTS)
     enable_testing()
@@ -61,8 +61,8 @@ if(BUILD_TESTS)
 endif()
 
 # Add CLI executable
-add_executable(kvdb-cli cli/main.cpp)
-target_link_libraries(kvdb-cli PRIVATE kvdb std-cxx-modules)
+# add_executable(kvdb-cli cli/main.cpp)
+# target_link_libraries(kvdb-cli PRIVATE kvdb std-cxx-modules)
 
 # 添加示例
 option(BUILD_EXAMPLES "Build examples" ON)

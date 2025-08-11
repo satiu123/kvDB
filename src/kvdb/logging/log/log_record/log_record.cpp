@@ -11,7 +11,7 @@ LogRecord::LogRecord(LogLevel lvl, std::chrono::system_clock::time_point ts, std
       lineNumber_(line) {}
 
 
-std::string LogRecord::convertTimeStamp(std::chrono::system_clock::time_point ts) const {
+std::string LogRecord::convertTimeStamp(std::chrono::system_clock::time_point ts) {
     return std::format("{:%Y-%m-%d %H:%M:%S}", ts);
 }
 std::string LogRecord::toString() const {

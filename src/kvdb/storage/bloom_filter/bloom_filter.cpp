@@ -5,7 +5,7 @@ import std.compat;
 
 // MurmurHash3, 64-bit versions, by Austin Appleby
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-static inline std::uint64_t fmix64(std::uint64_t k) {
+static inline auto fmix64(std::uint64_t k) -> std::uint64_t {
     k ^= k >> 33;
     k *= 0xff51afd7ed558ccdULL;
     k ^= k >> 33;
@@ -114,7 +114,7 @@ namespace kvdb::storage {
 
 BloomFilter::BloomFilter(std::uint64_t num_items, double false_positive_rate) {
     double m = -static_cast<double>(num_items) * std::log(false_positive_rate) /
-               (std::log(2) * std::log(2));
+               (std::numbers::ln2 * std::numbers::ln2);
     std::size_t num_bits = static_cast<std::size_t>(std::ceil(m));
     num_hash_functions_ = static_cast<std::uint32_t>(
         std::round((static_cast<double>(num_bits) / num_items) * std::log(2)));
@@ -171,7 +171,7 @@ void BloomFilter::serialize(std::ostream& os) const {
     os.write(reinterpret_cast<const char*>(byte_vector.data()), byte_vector.size());
 }
 
-std::optional<BloomFilter> BloomFilter::deserialize(std::istream& is) {
+auto BloomFilter::deserialize(std::istream& is) -> std::optional<BloomFilter> {
     std::uint32_t num_hash_functions;
     is.read(reinterpret_cast<char*>(&num_hash_functions), sizeof(num_hash_functions));
     if (is.gcount() != sizeof(num_hash_functions)) {
@@ -200,7 +200,7 @@ std::optional<BloomFilter> BloomFilter::deserialize(std::istream& is) {
     return BloomFilter(std::move(bit_set), num_hash_functions);
 }
 
-std::array<std::uint64_t, 2> BloomFilter::hash(std::string_view key) const {
+auto BloomFilter::hash(std::string_view key) const -> std::array<std::uint64_t, 2> {
     std::array<std::uint64_t, 2> hashes;
     MurmurHash3_x64_128(key.data(), static_cast<int>(key.length()), 0, hashes.data());
     return hashes;

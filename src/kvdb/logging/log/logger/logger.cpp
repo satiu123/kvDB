@@ -4,26 +4,63 @@ import std;
 
 namespace kvdb::logging {
 Logger& Logger::getInstance() {
-    static Logger instance;  // 使用局部静态变量确保单例
+    static Logger instance;
     return instance;
 }
-Logger::Logger() = default;
-Logger::~Logger() = default;
+
+Logger::Logger() : worker_thread_(&Logger::worker_loop, this) {}
+
+Logger::~Logger() {
+    done_ = true;
+    cv_.notify_one();
+    // worker_thread_ 的析构函数会自动调用 request_stop() 和 join()
+}
+
 void Logger::addSink(std::shared_ptr<LogSink> sink) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    sinks_.push_back(std::move(sink));  // 使用 std::move 避免不必要的复制
+    std::lock_guard<std::mutex> lock(sinks_mutex_);
+    sinks_.push_back(std::move(sink));
 }
+
 void Logger::removeAllSinks() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    sinks_.clear();  // 清空所有接收器
+    std::lock_guard<std::mutex> lock(sinks_mutex_);
+    sinks_.clear();
 }
+
 void Logger::setLevel(LogLevel level) {
-    level_ = level;  // 设置当前日志级别
+    level_ = level;
 }
+
 bool Logger::shouldLog(LogLevel level) const {
     return level >= level_;
 }
+
 bool Logger::isEnabled() const {
+    // 检查sinks是否为空也需要保护
+    std::lock_guard<std::mutex> lock(sinks_mutex_);
     return !sinks_.empty();
 }
+
+void Logger::worker_loop() {
+    std::queue<LogRecord> local_queue;
+    while (!done_) {
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            cv_.wait(lock, [this] { return !queue_.empty() || done_; });
+            if (done_ && queue_.empty()) {
+                return;
+            }
+            local_queue.swap(queue_);
+        }
+
+        while (!local_queue.empty()) {
+            const auto& record = local_queue.front();
+            std::lock_guard<std::mutex> lock(sinks_mutex_);
+            for (const auto& sink : sinks_) {
+                sink->log(record);
+            }
+            local_queue.pop();
+        }
+    }
+}
+
 }  // namespace kvdb::logging
