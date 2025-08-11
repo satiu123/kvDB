@@ -12,7 +12,7 @@ int main() {
     logger.addSink(std::make_shared<kvdb::logging::ConsoleSink>());
 
     // 记录一些日志
-    LOG_INFO()("This is an info message.");
-    LOG_DEBUG()("This is a debug message with a number: {}", 42);
+    LOG_INFO()("这是一条信息日志。");
+    LOG_DEBUG()("这是一条带数字的调试日志: {}", 42);
     return 0;
 }

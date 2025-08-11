@@ -48,7 +48,7 @@ WalRecord::WalRecord(WalOpType op_type, std::string_view key, std::string_view v
 auto WalRecord::deserialize(std::span<const std::byte> data)
     -> std::expected<WalRecord, std::string> {
     if (data.empty()) {
-        return std::unexpected("Cannot deserialize from empty data");
+        return std::unexpected("无法从空数据反序列化");
     }
 
     BytesBufferView buf(data);
@@ -57,7 +57,7 @@ auto WalRecord::deserialize(std::span<const std::byte> data)
     if (!total_size_res)
         return std::unexpected(total_size_res.error());
     if (*total_size_res != data.size())
-        return std::unexpected("Record size mismatch");
+        return std::unexpected("记录大小不匹配");
 
     auto stored_crc_res = buf.read_uint32();
     if (!stored_crc_res)
@@ -65,7 +65,7 @@ auto WalRecord::deserialize(std::span<const std::byte> data)
 
     auto payload_span = data.subspan(sizeof(std::uint32_t) * 2);
     if (kvdb::core::binary::calculate_crc32(payload_span) != *stored_crc_res) {
-        return std::unexpected("Checksum mismatch, record may be corrupted");
+        return std::unexpected("校验和不匹配，记录可能已损坏");
     }
 
     auto op_type_res = buf.read_uint8();
@@ -92,7 +92,7 @@ auto WalRecord::serialize_to(std::span<std::byte> target_buffer) const
     -> std::expected<std::size_t, std::string> {
     const auto required_size = size();
     if (target_buffer.size() < required_size) {
-        return std::unexpected("Target buffer is too small");
+        return std::unexpected("目标缓冲区太小");
     }
 
     BytesBufferView buf(target_buffer);
@@ -129,7 +129,7 @@ static std::string op_type_to_string(WalOpType op_type) {
 }
 
 std::string WalRecord::toString() const {
-    return std::format("WalRecord(序列号={}, 操作类型={}, key='{}', value='{}', CRC={:x})",
+    return std::format("WalRecord(序列号={}, 操作类型={}, 键='{}', 值='{}', CRC={:x})",
                        sequence_number_, op_type_to_string(op_type_), key_, value_, checksum_);
 }
 

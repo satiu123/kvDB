@@ -28,7 +28,7 @@ class LogRecord {
     LogRecord(LogLevel lvl, std::chrono::system_clock::time_point ts, std::string msg,
               std::string src, int line);
 
-    std::string convertTimeStamp(std::chrono::system_clock::time_point ts) const;
+    static std::string convertTimeStamp(std::chrono::system_clock::time_point ts);
     [[nodiscard]] std::string toString() const;
     [[nodiscard]] const std::string& getMessage() const {
         return message_;

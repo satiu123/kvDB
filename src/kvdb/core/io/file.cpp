@@ -39,7 +39,7 @@ void File::open_if_needed() {
 
     fd_ = open(path_.c_str(), flags, S_IRUSR | S_IWUSR);
     if (fd_ == -1) {
-        throw std::system_error(errno, std::generic_category(), "Failed to open file: " + path_);
+        throw std::system_error(errno, std::generic_category(), "打开文件失败: " + path_);
     }
 
     // 打开文件后，获取其大小
@@ -132,7 +132,7 @@ void File::remove(const std::string& path) {
         // 如果文件不存在，我们不认为这是一个需要抛出异常的错误
         if (errno != ENOENT) {
             throw std::system_error(errno, std::generic_category(),
-                                    "Failed to remove file: " + path);
+                                    "删除文件失败: " + path);
         }
     }
 }

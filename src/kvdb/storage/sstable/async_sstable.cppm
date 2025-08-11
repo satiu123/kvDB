@@ -38,6 +38,7 @@ class SSTable {
       private:
         Task<void> writeBlock();
 
+        // 文件输出流
         // std::ofstream file_;
         IOUring& ring_;
         File out_file_;
@@ -76,6 +77,7 @@ class SSTable {
     Task<bool> loadIndex();
     Task<bool> loadBloomFilter();
 
+    // 文件输入流
     // std::ifstream file_;
     IOUring& ring_;
     File in_file_;

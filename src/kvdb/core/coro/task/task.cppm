@@ -90,7 +90,6 @@ class [[nodiscard]] Task {
         return awaiter{handle_};
     }
 
-    // 获取结果
     // 检查协程是否完成
     bool done() const {
         return !handle_ || handle_.done();
@@ -211,3 +210,4 @@ class [[nodiscard]] Task<void> {
     std::coroutine_handle<promise_type> handle_;
 };
 }  // namespace kvdb::core::coro
+

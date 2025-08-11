@@ -17,7 +17,7 @@ IOUring::IOUring(unsigned int queue_depth) : ring_(new io_uring) {
     if (io_uring_queue_init(queue_depth, static_cast<io_uring*>(ring_), 0) < 0) {
         delete static_cast<io_uring*>(ring_);
         ring_ = nullptr;
-        throw std::runtime_error("Failed to initialize io_uring");
+        throw std::runtime_error("初始化io_uring失败");
     }
     initialized_ = true;
 }
@@ -58,7 +58,7 @@ void IOUring::wait_for_completion() {
     io_uring_cqe* cqe;
     // 等待完成队列中的一个条目(CQE)
     if (io_uring_wait_cqe(static_cast<io_uring*>(ring_), &cqe) < 0) {
-        throw std::runtime_error("Failed to wait for completion queue entry");
+        throw std::runtime_error("等待完成队列条目失败");
     }
 
     // 从CQE中提取结果和用户数据
@@ -86,7 +86,7 @@ void IOUring::submit_read_request(int fd, std::span<std::byte> buffer, std::uint
         submit_requests();
         sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
         if (!sqe) {
-            throw std::runtime_error("Failed to get submission queue entry");
+            throw std::runtime_error("获取提交队列条目失败");
         }
     }
     // 准备读操作的SQE
@@ -101,7 +101,7 @@ void IOUring::submit_nop_request(std::uint64_t user_data) {
         submit_requests();
         sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
         if (!sqe) {
-            throw std::runtime_error("Failed to get submission queue entry");
+            throw std::runtime_error("获取提交队列条目失败");
         }
     }
     // 准备nop操作的SQE
@@ -118,7 +118,7 @@ void IOUring::submit_write_request(int fd, std::span<const std::byte> buffer, st
         submit_requests();
         sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
         if (!sqe) {
-            throw std::runtime_error("Failed to get submission queue entry");
+            throw std::runtime_error("获取提交队列条目失败");
         }
     }
     // 准备写操作的SQE
@@ -131,7 +131,7 @@ void IOUring::submit_write_request(int fd, std::span<const std::byte> buffer, st
 void IOUring::submit_requests() {
     // 提交请求，返回值是提交的请求数量
     if (io_uring_submit(static_cast<io_uring*>(ring_)) < 0) {
-        throw std::runtime_error("Failed to submit requests to io_uring");
+        throw std::runtime_error("向io_uring提交请求失败");
     }
 }
 

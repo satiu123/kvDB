@@ -60,8 +60,9 @@ class AsyncDatabase {
   private:
     Task<void> flush_memtable_to_sstable();
     std::unique_ptr<kvdb::core::io::IOUring> ring_;  // 拥有所有权
-    // MemTable
+    // 可变内存表
     std::map<std::string, std::string, std::less<>> memtable_;
+    // 不可变内存表
     std::unique_ptr<std::map<std::string, std::string, std::less<>>> immutable_memtable_;
 
     std::string sstables_path_;

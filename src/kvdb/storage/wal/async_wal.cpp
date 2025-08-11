@@ -8,11 +8,11 @@ import kvdb.core.coro.task;
 
 using kvdb::core::coro::Task;
 using kvdb::core::io::FileMode;
-using kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO;
+using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO;
 
 namespace kvdb::storage {
 
-// --- Public API ---
+// --- 公共 API ---
 
 AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
     : ring_(&ring),
@@ -21,23 +21,26 @@ AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
     if (!std::filesystem::exists(path / "wal")) {
         std::filesystem::create_directories(path / "wal");
     }
-    LOG_INFO()("AsyncWAL initialized for path: {}", path.string());
+    LOG_INFO()("异步WAL已为路径'{}'初始化", path.string());
 }
 
 // --- 异步写入 API ---
 
 Task<bool> AsyncWal::async_append_put(std::string_view key, std::string_view value) {
     WalRecord record(WalOpType::PUT, key, value, ++sequence_number_);
+    LOG_DEBUG()("追加PUT记录到WAL: key={}, seq={}", key, sequence_number_.load());
     co_return co_await async_append_record(record);
 }
 
 Task<bool> AsyncWal::async_append_remove(std::string_view key) {
     WalRecord record(WalOpType::REMOVE, key, "", ++sequence_number_);
+    LOG_DEBUG()("追加REMOVE记录到WAL: key={}, seq={}", key, sequence_number_.load());
     co_return co_await async_append_record(record);
 }
 
 Task<bool> AsyncWal::async_append_clear() {
     WalRecord record(WalOpType::CLEAR, "", "", ++sequence_number_);
+    LOG_DEBUG()("追加CLEAR记录到WAL: seq={}", sequence_number_.load());
     co_return co_await async_append_record(record);
 }
 
@@ -47,13 +50,13 @@ Task<bool> AsyncWal::async_append_record(const WalRecord& record) {
 
     auto serialize_result = record.serialize_to(temp_buffer);
     if (!serialize_result) {
-        LOG_ERROR()("Failed to serialize WAL record: {}", serialize_result.error());
+        LOG_ERROR()("序列化WAL记录失败: {}", serialize_result.error());
         co_return false;
     }
 
     auto write_result = co_await wal_file_.write(temp_buffer, -1);
-    if (!write_result) {
-        LOG_ERROR()("Async write to WAL file failed.");
+    if (write_result < 0) { // 检查小于0的错误码
+        LOG_ERROR()("异步写入WAL文件失败，错误码: {}", write_result);
         co_return false;
     }
 
@@ -63,6 +66,7 @@ Task<bool> AsyncWal::async_append_record(const WalRecord& record) {
 // --- 异步读取 API ---
 
 Task<bool> AsyncWal::async_replay(const std::function<bool(const WalRecord&)>& handler) {
+    LOG_INFO()("开始异步WAL重放...");
     file_read_offset_ = 0;
     buffer_pos_ = 0;
     buffer_valid_size_ = 0;
@@ -70,16 +74,19 @@ Task<bool> AsyncWal::async_replay(const std::function<bool(const WalRecord&)>& h
     while (true) {
         auto record_result = co_await async_read_next_record();
         if (!record_result) {
-            if (record_result.error() == "EOF")
+            if (record_result.error() == "EOF") {
+                LOG_DEBUG()("到达WAL文件末尾，重放结束");
                 break;
-            LOG_ERROR()("Failed during WAL replay: {}", record_result.error());
+            }
+            LOG_ERROR()("WAL重放过程中出错: {}", record_result.error());
             co_return false;
         }
         if (!handler(*record_result)) {
-            LOG_ERROR()("WAL replay handler returned false.");
+            LOG_ERROR()("WAL重放处理器返回false，重放终止");
             co_return false;
         }
     }
+    LOG_INFO()("异步WAL重放成功完成");
     co_return true;
 }
 
@@ -103,11 +110,13 @@ Task<std::expected<WalRecord, std::string>> AsyncWal::async_read_next_record() {
     // 3. 检查完整记录是否在缓冲区
     if (buffer_pos_ + record_size > buffer_valid_size_) {
         if (record_size > READ_BUFFER_SIZE) {
-            co_return std::unexpected("Record size exceeds buffer size.");
+            LOG_ERROR()("记录大小({})超过缓冲区大小({})", record_size, READ_BUFFER_SIZE);
+            co_return std::unexpected("记录大小超过缓冲区大小");
         }
         auto fill_res = co_await fill_read_buffer();
         if (!fill_res || buffer_pos_ + record_size > buffer_valid_size_) {
-            co_return std::unexpected("Corrupted WAL: partial record at EOF.");
+            LOG_ERROR()("损坏的WAL：在文件末尾发现部分记录");
+            co_return std::unexpected("损坏的WAL：在文件末尾发现部分记录");
         }
     }
 
@@ -144,20 +153,19 @@ Task<std::expected<std::size_t, std::string>> AsyncWal::fill_read_buffer() {
                                     read_buffer_.size() - buffer_valid_size_);
     auto read_res = co_await wal_file_.read(write_span, file_read_offset_);
 
-    if (!read_res) {
-        // **核心修复**：如果读取前没有剩余数据，则将读取失败视作正常的EOF
+    if (read_res < 0) { // 小于0表示错误
         if (buffer_valid_size_ == 0) {
-            co_return 0;  // 返回成功读取0字节
+            co_return 0;  // 如果之前没有数据，认为是正常的EOF
         }
-        // 否则，这是一个真实的读取错误
-        co_return std::unexpected("Failed to read from WAL file into buffer.");
+        LOG_ERROR()("从WAL文件向缓冲区读取失败，错误码: {}", read_res);
+        co_return std::unexpected("从WAL文件向缓冲区读取失败");
     }
 
     // 更新状态
     file_read_offset_ += read_res;
     buffer_valid_size_ += read_res;
 
-    co_return read_res;
+    co_return static_cast<std::size_t>(read_res);
 }
 
 // --- 其他 API ---

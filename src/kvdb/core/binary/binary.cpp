@@ -63,7 +63,7 @@ auto BytesBufferView::read_string_view() -> std::expected<std::string_view, std:
     std::uint32_t len = *len_res;
 
     if (offset_ + len > r_span_.size()) {
-        return std::unexpected("String read out of bounds");
+        return std::unexpected("字符串读取越界");
     }
     std::string_view str(reinterpret_cast<const char*>(r_span_.data() + offset_), len);
     offset_ += len;

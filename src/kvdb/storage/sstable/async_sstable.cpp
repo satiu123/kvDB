@@ -13,7 +13,9 @@ using kvdb::core::binary::BytesBufferView;
 using kvdb::core::coro::Task;
 using kvdb::core::io::FileMode;
 using kvdb::core::io::IOUring;
-using kvdb::logging::LOG_INFO;
+using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
+    kvdb::logging::LOG_WARNING;
+
 namespace kvdb::storage {
 
 SSTable::SSTable(IOUring& ring) : ring_(ring), in_file_(ring, "", FileMode::Read) {}
@@ -22,7 +24,9 @@ SSTable::Builder::Builder(IOUring& ring, std::string_view path, std::size_t bloc
     : ring_(ring),
       out_file_(ring, path, FileMode::Write),
       path_(path),
-      block_size_threshold_(block_size_threshold) {}
+      block_size_threshold_(block_size_threshold) {
+    LOG_DEBUG()("SSTable Builder为'{}'创建", path_);
+}
 
 Task<void> SSTable::Builder::add(std::string_view key, std::string_view value) {
     std::string entry_buffer;
@@ -35,6 +39,7 @@ Task<void> SSTable::Builder::add(std::string_view key, std::string_view value) {
     last_key_in_block_ = key;
 
     if (current_block_data_.size() >= block_size_threshold_) {
+        LOG_DEBUG()("SSTable块达到阈值，写入磁盘: {}", path_);
         co_await writeBlock();
     }
 }
@@ -54,6 +59,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
     if (!current_block_data_.empty()) {
         co_await writeBlock();
     }
+    LOG_DEBUG()("完成SSTable所有数据块的写入: {}", path_);
 
     std::uint64_t index_block_offset = offset_;
     std::string index_buffer_str;
@@ -70,6 +76,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
     co_await out_file_.write(std::as_bytes(std::span{index_buffer_str}), offset_);
     std::uint64_t index_block_size = index_buffer_str.size();
     offset_ += index_block_size;
+    LOG_DEBUG()("索引块已写入SSTable: {}", path_);
 
     BloomFilter bloom_filter(data.size(), 0.01);
     for (const auto& [key, value] : data) {
@@ -82,6 +89,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
     co_await out_file_.write(std::as_bytes(std::span{bloom_buffer}), offset_);
     std::uint64_t bloom_filter_size = bloom_buffer.size();
     offset_ += bloom_filter_size;
+    LOG_DEBUG()("布隆过滤器已写入SSTable: {}", path_);
 
     Footer footer;
     footer.index_block_offset = index_block_offset;
@@ -91,6 +99,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
 
     co_await out_file_.write(
         std::as_bytes(std::span{reinterpret_cast<char*>(&footer), sizeof(footer)}), offset_);
+    LOG_DEBUG()("Footer已写入SSTable: {}", path_);
 
     LOG_INFO()("SSTable '{}' 创建成功完成。", path_);
     co_return true;
@@ -99,6 +108,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
 Task<bool> SSTable::buildFrom(IOUring& ring, std::string_view path,
                               const std::map<std::string, std::string, std::less<>>& data) {
     if (data.empty()) {
+        LOG_WARNING()("尝试从空数据构建SSTable，已跳过: {}", path);
         co_return false;
     }
 
@@ -113,35 +123,47 @@ Task<bool> SSTable::buildFrom(IOUring& ring, std::string_view path,
 Task<bool> SSTable::open(std::string_view path) {
     path_ = path;
     in_file_ = File(ring_, path, FileMode::Read);
+    LOG_DEBUG()("正在打开SSTable: {}", path);
     if (!co_await loadIndex()) {
+        LOG_ERROR()("加载SSTable索引失败: {}", path);
         co_return false;
     }
-    co_return co_await loadBloomFilter();
+    if (!co_await loadBloomFilter()) {
+        LOG_ERROR()("加载SSTable布隆过滤器失败: {}", path);
+        co_return false;
+    }
+    LOG_INFO()("SSTable '{}' 已成功打开", path);
+    co_return true;
 }
 
 Task<bool> SSTable::loadBloomFilter() {
     if (footer_.bloom_filter_size == 0) {
+        LOG_DEBUG()("SSTable中没有布隆过滤器: {}", path_);
         co_return true;
     }
     std::string bloom_data(footer_.bloom_filter_size, '\0');
     auto bytes_read = co_await in_file_.read(std::as_writable_bytes(std::span{bloom_data}),
                                              footer_.bloom_filter_offset);
     if (static_cast<std::uint64_t>(bytes_read) != footer_.bloom_filter_size) {
+        LOG_ERROR()("读取布隆过滤器数据不完整: {}", path_);
         co_return false;
     }
 
     std::istringstream bloom_stream(bloom_data);
     auto bloom_filter = BloomFilter::deserialize(bloom_stream);
     if (!bloom_filter) {
+        LOG_ERROR()("反序列化布隆过滤器失败: {}", path_);
         co_return false;
     }
     bloom_filter_ = std::make_unique<BloomFilter>(std::move(*bloom_filter));
+    LOG_DEBUG()("SSTable的布隆过滤器已加载: {}", path_);
     co_return true;
 }
 
 Task<bool> SSTable::loadIndex() {
     auto file_size = in_file_.get_size();
     if (file_size < sizeof(Footer)) {
+        LOG_ERROR()("SSTable文件太小，无法包含Footer: {}", path_);
         co_return false;
     }
     auto footer_offset = file_size - sizeof(Footer);
@@ -150,10 +172,12 @@ Task<bool> SSTable::loadIndex() {
         footer_offset);
 
     if (static_cast<std::uint64_t>(bytes_read) != sizeof(Footer)) {
+        LOG_ERROR()("读取SSTable Footer不完整: {}", path_);
         co_return false;
     }
 
     if (footer_.magic != SSTABLE_MAGIC) {
+        LOG_ERROR()("SSTable魔数不匹配，文件可能已损坏: {}", path_);
         co_return false;
     }
     std::string index_data(footer_.index_block_size, '\0');
@@ -161,6 +185,7 @@ Task<bool> SSTable::loadIndex() {
                                         footer_.index_block_offset);
 
     if (static_cast<std::uint64_t>(bytes_read) != footer_.index_block_size) {
+        LOG_ERROR()("读取SSTable索引块不完整: {}", path_);
         co_return false;
     }
 
@@ -178,11 +203,13 @@ Task<bool> SSTable::loadIndex() {
 
         index_.emplace_back(std::string(*key_res), *offset_res, *size_res);
     }
+    LOG_DEBUG()("SSTable的索引已加载: {}", path_);
     co_return true;
 }
 
 Task<std::optional<std::string>> SSTable::find(std::string_view key) {
     if (bloom_filter_ && !bloom_filter_->contains(key)) {
+        LOG_DEBUG()("布隆过滤器未命中，跳过SSTable '{}' 的搜索，键: {}", path_, key);
         co_return std::nullopt;
     }
 
@@ -198,12 +225,15 @@ Task<std::optional<std::string>> SSTable::find(std::string_view key) {
     kvdb::core::ParsedBlock block_map_ptr;
 
     if (cached_block) {
+        LOG_DEBUG()("块缓存命中: SSTable='{}', offset={}", path_, it->offset);
         block_map_ptr = *cached_block;
     } else {
+        LOG_DEBUG()("块缓存未命中，从磁盘读取: SSTable='{}', offset={}", path_, it->offset);
         std::string block_data(it->size, '\0');
         auto bytes_read =
             co_await in_file_.read(std::as_writable_bytes(std::span{block_data}), it->offset);
         if (static_cast<std::uint64_t>(bytes_read) != it->size) {
+            LOG_ERROR()("读取数据块失败: SSTable='{}', offset={}", path_, it->offset);
             co_return std::nullopt;
         }
 
@@ -239,9 +269,8 @@ Task<std::map<std::string, std::string>> SSTable::readAll() {
                                                  index_record.offset);
 
         if (static_cast<std::uint64_t>(bytes_read) != index_record.size) {
-            // Handle error: maybe log and continue, or throw an exception
-            LOG_INFO()("Error reading block for SSTable {}", path_);
-            continue;  // Skip this block
+            LOG_ERROR()("读取SSTable '{}' 的数据块时出错", path_);
+            continue;  // 跳过这个块
         }
 
         BytesBufferView view(std::as_bytes(std::span{block_data}));
