@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 
 # Get all cpp files in current directory
-file(GLOB CPP_FILES "*.cpp")
+file(GLOB_RECURSE CPP_FILES "*.cpp")
 
 # Create executable target for each cpp file
 foreach(CPP_FILE ${CPP_FILES})

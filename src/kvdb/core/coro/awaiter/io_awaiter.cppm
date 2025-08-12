@@ -10,10 +10,16 @@ export class BaseAwaiter {
     virtual ~BaseAwaiter() = default;
 
     // 总是返回 false，表示需要挂起
-    bool await_ready() const noexcept { return false; }
+    bool await_ready() const noexcept {
+        return false;
+    }
 
-    void set_result(std::int32_t res) { result_ = res; }
-    auto get_handle() const noexcept { return handle_; }
+    void set_result(std::int32_t res) {
+        result_ = res;
+    }
+    auto get_handle() const noexcept {
+        return handle_;
+    }
 
   protected:
     void* ring_;
@@ -32,7 +38,9 @@ export class [[nodiscard]] ReadAwaiter : public BaseAwaiter {
     void await_suspend(std::coroutine_handle<> handle) noexcept;
 
     // 恢复协程时获取结果
-    auto await_resume() const noexcept { return result_; }
+    auto await_resume() const noexcept {
+        return result_;
+    }
 
   private:
     int fd_;
@@ -52,7 +60,9 @@ export class [[nodiscard]] WriteAwaiter : public BaseAwaiter {
     void await_suspend(std::coroutine_handle<> handle) noexcept;
 
     // 恢复协程时获取结果
-    auto await_resume() const noexcept { return result_; }
+    auto await_resume() const noexcept {
+        return result_;
+    }
 
   private:
     int fd_;

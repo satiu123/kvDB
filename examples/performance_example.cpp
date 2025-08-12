@@ -82,10 +82,16 @@ int main() {
     std::filesystem::remove_all(db_path);
 
     kvdb::core::AsyncDatabase db(db_path);
+    // 确保日志与数据库目录存在
+    std::filesystem::create_directories(db_path);
     auto& logger = kvdb::logging::Logger::getInstance();
-    logger.addSink(*kvdb::logging::FileSink::create(db_path));
-    // std::filesystem::create_directories(db_path);
+    if (auto sinkExp = kvdb::logging::FileSink::create(db_path); sinkExp) {
+        logger.addSink(*sinkExp);
+    } else {
+        std::cerr << "Failed to create FileSink: " << sinkExp.error() << std::endl;
+    }
     // 运行异步压力测试
+    // db.set_flush_threshold(50000);
     db.run(performance_test_main(db));
 
     return 0;
