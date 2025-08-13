@@ -42,12 +42,13 @@ class IOUring {
     // 这个函数会阻塞，直到至少有一个IO操作完成
     void wait_for_completion();
 
+    // 非阻塞/带超时的等待，timeout_ms=0 表示立即返回，>0 表示超时毫秒
+    bool wait_for_completion_for(std::uint32_t timeout_ms);
+
     // 供 Awaiter 调用的内部方法
-    void submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset,
-                             std::uint64_t user_data);
-    void submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset,
-                              std::uint64_t user_data);
-    void submit_nop_request(std::uint64_t user_data);
+    void submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset, void* user_data);
+    void submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset, void* user_data);
+    void submit_nop_request(void* user_data);
 
   private:
     // 实际提交所有准备好的请求到内核

@@ -63,7 +63,7 @@ void IOUring::wait_for_completion() {
     }
 
     // 从CQE中提取结果和用户数据
-    auto user_data = reinterpret_cast<std::uint64_t>(io_uring_cqe_get_data(cqe));
+    void* user_data = io_uring_cqe_get_data(cqe);
     auto result = cqe->res;
 
     // 标记CQE为已处理
@@ -71,15 +71,55 @@ void IOUring::wait_for_completion() {
 
     // 恢复协程
     // 通过基类指针安全地调用
-    auto* awaiter = reinterpret_cast<BaseAwaiter*>(user_data);
+    auto* awaiter = static_cast<BaseAwaiter*>(user_data);
     if (awaiter) {
         awaiter->set_result(result);
         awaiter->get_handle().resume();
     }
 }
 
-void IOUring::submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset,
-                                  std::uint64_t user_data) {
+bool IOUring::wait_for_completion_for(std::uint32_t timeout_ms) {
+    // 提交所有待处理的请求
+    submit_requests();
+
+    io_uring_cqe* cqe = nullptr;
+    int ret = 0;
+    if (timeout_ms == 0) {
+        // 立即返回的非阻塞检查
+        ret = io_uring_peek_cqe(static_cast<io_uring*>(ring_), &cqe);
+        if (ret < 0 || cqe == nullptr) {
+            return false;  // 没有完成事件
+        }
+    } else {
+        // 带超时等待
+        __kernel_timespec ts{};
+        ts.tv_sec = timeout_ms / 1000;
+        ts.tv_nsec = static_cast<long>((timeout_ms % 1000)) * 1000000L;
+        ret = io_uring_wait_cqe_timeout(static_cast<io_uring*>(ring_), &cqe, &ts);
+        if (ret < 0) {
+            if (ret == -ETIME) {
+                return false;  // 超时
+            }
+            throw std::runtime_error("等待完成队列条目失败");
+        }
+        if (cqe == nullptr) {
+            return false;
+        }
+    }
+
+    // 处理完成事件
+    void* user_data = io_uring_cqe_get_data(cqe);
+    auto result = cqe->res;
+    io_uring_cqe_seen(static_cast<io_uring*>(ring_), cqe);
+    auto* awaiter = static_cast<BaseAwaiter*>(user_data);
+    if (awaiter) {
+        awaiter->set_result(result);
+        awaiter->get_handle().resume();
+    }
+    return true;
+}
+
+void IOUring::submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset, void* user_data) {
     // 从io_uring获取一个提交队列条目(SQE)
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
     if (!sqe) {
@@ -93,10 +133,10 @@ void IOUring::submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset,
     // 准备读操作的SQE
     io_uring_prep_read(sqe, fd, buffer.data(), buffer.size(), offset);
     // 设置用户数据，用于在完成时识别操作
-    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
+    io_uring_sqe_set_data(sqe, user_data);
 }
 
-void IOUring::submit_nop_request(std::uint64_t user_data) {
+void IOUring::submit_nop_request(void* user_data) {
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
     if (!sqe) {
         submit_requests();
@@ -107,11 +147,11 @@ void IOUring::submit_nop_request(std::uint64_t user_data) {
     }
     // 准备nop操作的SQE
     io_uring_prep_nop(sqe);
-    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
+    io_uring_sqe_set_data(sqe, user_data);
 }
 
 void IOUring::submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset,
-                                   std::uint64_t user_data) {
+                                   void* user_data) {
     // 从io_uring获取一个提交队列条目(SQE)
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
     if (!sqe) {
@@ -125,7 +165,7 @@ void IOUring::submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t o
     // 准备写操作的SQE
     io_uring_prep_write(sqe, fd, buffer.data(), buffer.size(), offset);
     // 设置用户数据，用于在完成时识别操作
-    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
+    io_uring_sqe_set_data(sqe, user_data);
 }
 
 // 提交所有准备好的请求到内核

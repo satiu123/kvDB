@@ -19,13 +19,23 @@ FetchContent_MakeAvailable(googletest)
 # --- Test Executable Definition ---
 
 # Define the test executable for the logger
-add_executable(test_logger
+# Define a single test executable containing all test sources
+add_executable(test_kvdb
     test_logger.cpp
+    test_binary.cpp
+    test_manifest.cpp
+    test_bloom_filter.cpp
+    test_wal_record.cpp
+    test_io.cpp
+    test_async_wal.cpp
+    test_async_database.cpp
+    test_sstable.cpp
+    test_async_manifest.cpp
+    test_async_database_stress.cpp
 )
 
 # Link the test executable against our kvdb library and GoogleTest
-# GTest::gtest_main provides the main() function for the test runner
-target_link_libraries(test_logger 
+target_link_libraries(test_kvdb 
     PRIVATE 
         kvdb
         GTest::gtest
@@ -33,6 +43,5 @@ target_link_libraries(test_logger
 )
 
 # Discover tests in the executable using gtest_discover_tests
-# This allows CTest to run the tests found in the executable
 include(GoogleTest)
-# gtest_discover_tests(test_logger)
+gtest_discover_tests(test_kvdb)
