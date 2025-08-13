@@ -1,8 +1,11 @@
 module kvdb.core.binary;
 
 import std;
+import kvdb.core.types;
 
 namespace kvdb::core::binary {
+using kvdb::core::types::ConstByteSpan;
+using kvdb::core::types::Result;
 
 // --- BytesBuffer (拥有所有权) ---
 
@@ -46,17 +49,17 @@ auto BytesBufferView::write_string(std::string_view str) -> bool {
 // 读取实现
 
 
-auto BytesBufferView::read_uint8() -> std::expected<std::uint8_t, std::string> {
+auto BytesBufferView::read_uint8() -> Result<std::uint8_t> {
     return read_object_view<std::uint8_t>(*this);
 }
-auto BytesBufferView::read_uint32() -> std::expected<std::uint32_t, std::string> {
+auto BytesBufferView::read_uint32() -> Result<std::uint32_t> {
     return read_object_view<std::uint32_t>(*this);
 }
-auto BytesBufferView::read_uint64() -> std::expected<std::uint64_t, std::string> {
+auto BytesBufferView::read_uint64() -> Result<std::uint64_t> {
     return read_object_view<std::uint64_t>(*this);
 }
 
-auto BytesBufferView::read_string_view() -> std::expected<std::string_view, std::string> {
+auto BytesBufferView::read_string_view() -> Result<std::string_view> {
     auto len_res = read_uint32();
     if (!len_res)
         return std::unexpected(len_res.error());
@@ -106,7 +109,7 @@ static constexpr std::array<std::uint32_t, 256> crc32_table = {
     0xbdbdf21c, 0xcabac28a, 0x53b39330, 0x24b4a3a6, 0xbad03605, 0xcdd70693, 0x54de5729, 0x23d967bf,
     0xb3667a2e, 0xc4614ab8, 0x5d681b02, 0x2a6f2b94, 0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d};
 
-std::uint32_t calculate_crc32(std::span<const std::byte> data) {
+std::uint32_t calculate_crc32(ConstByteSpan data) {
     std::uint32_t crc = 0xFFFFFFFF;
     for (std::byte byte : data) {
         crc = (crc >> 8) ^ crc32_table.at((crc & 0xFF) ^ static_cast<std::uint8_t>(byte));

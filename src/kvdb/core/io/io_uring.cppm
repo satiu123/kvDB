@@ -2,7 +2,10 @@ export module kvdb.core.io.io_uring;
 
 import std;
 import kvdb.core.coro.awaiter.io_awaiter;
+import kvdb.core.types;
 export namespace kvdb::core::io {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
 
 // 导出IOUring类，封装io_uring的核心功能
 class IOUring {
@@ -23,14 +26,13 @@ class IOUring {
     // fd: 文件描述符
     // buffer: 数据读取的目标缓冲区
     // offset: 文件读取的偏移量
-    [[nodiscard]] auto submit_read(int fd, std::span<std::byte> buffer, std::uint64_t offset)
-        -> ReadAwaiter;
+    [[nodiscard]] auto submit_read(int fd, ByteSpan buffer, std::uint64_t offset) -> ReadAwaiter;
 
     // 提交一个写请求到队列
     // fd: 文件描述符
     // buffer: 要写入文件的数据缓冲区
     // offset: 文件写入的偏移量
-    [[nodiscard]] auto submit_write(int fd, std::span<const std::byte> buffer, std::uint64_t offset)
+    [[nodiscard]] auto submit_write(int fd, ConstByteSpan buffer, std::uint64_t offset)
         -> WriteAwaiter;
 
     // 提交一个无操作请求到队列
@@ -41,9 +43,9 @@ class IOUring {
     void wait_for_completion();
 
     // 供 Awaiter 调用的内部方法
-    void submit_read_request(int fd, std::span<std::byte> buffer, std::uint64_t offset,
+    void submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset,
                              std::uint64_t user_data);
-    void submit_write_request(int fd, std::span<const std::byte> buffer, std::uint64_t offset,
+    void submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset,
                               std::uint64_t user_data);
     void submit_nop_request(std::uint64_t user_data);
 

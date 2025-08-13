@@ -1,8 +1,10 @@
 export module kvdb.core.database.manifest;
 
 import std;
+import kvdb.core.types;
 
 export namespace kvdb::core::database {
+using kvdb::core::types::Result;
 
 /**
  * @brief Manifest 文件的内容
@@ -13,9 +15,9 @@ struct Manifest {
     std::map<int, std::vector<std::string>> sstables;
 
     // 序列化到字符串
-    auto serialize(std::ostream& os) const -> std::expected<void, std::string>;
+    auto serialize(std::ostream& os) const -> Result<void>;
 
     // 从字符串反序列化
-    auto deserialize(std::istream& is) -> std::expected<void, std::string>;
+    auto deserialize(std::istream& is) -> Result<void>;
 };
 }  // namespace kvdb::core::database

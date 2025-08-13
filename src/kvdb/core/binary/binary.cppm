@@ -1,8 +1,12 @@
 export module kvdb.core.binary;
 
 import std;
+import kvdb.core.types;
 
 export namespace kvdb::core::binary {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
+using kvdb::core::types::Result;
 
 // --- 拥有所有权的缓冲区 (用于构建数据) ---
 class BytesBuffer {
@@ -16,7 +20,7 @@ class BytesBuffer {
     auto get_data() const -> const std::vector<std::byte>& {
         return data_;
     }
-    auto get_span() const -> std::span<const std::byte> {
+    auto get_span() const -> ConstByteSpan {
         return data_;
     }
     std::size_t get_offset() const {
@@ -31,8 +35,8 @@ class BytesBuffer {
 // --- 非拥有所有权的缓冲区视图 (用于零拷贝读写) ---
 class BytesBufferView {
   public:
-    explicit BytesBufferView(std::span<const std::byte> data) : r_span_(data) {}
-    explicit BytesBufferView(std::span<std::byte> data) : r_span_(data), w_span_(data) {}
+    explicit BytesBufferView(ConstByteSpan data) : r_span_(data) {}
+    explicit BytesBufferView(ByteSpan data) : r_span_(data), w_span_(data) {}
     // 写入 API
     auto write_uint8(std::uint8_t value) -> bool;
     auto write_uint32(std::uint32_t value) -> bool;
@@ -41,28 +45,28 @@ class BytesBufferView {
     template <typename T>
     static bool write_object_view(BytesBufferView& view, const T& value);
     // 读取 API
-    auto read_uint8() -> std::expected<std::uint8_t, std::string>;
-    auto read_uint32() -> std::expected<std::uint32_t, std::string>;
-    auto read_uint64() -> std::expected<std::uint64_t, std::string>;
-    auto read_string_view() -> std::expected<std::string_view, std::string>;
+    auto read_uint8() -> Result<std::uint8_t>;
+    auto read_uint32() -> Result<std::uint32_t>;
+    auto read_uint64() -> Result<std::uint64_t>;
+    auto read_string_view() -> Result<std::string_view>;
     template <typename T>
-    static auto read_object_view(BytesBufferView& view) -> std::expected<T, std::string>;
+    static auto read_object_view(BytesBufferView& view) -> Result<T>;
     // 访问器
     std::size_t get_offset() const {
         return offset_;
     }
-    std::span<const std::byte> get_written_span() const {
+    ConstByteSpan get_written_span() const {
         return r_span_.first(offset_);
     }
 
   private:
-    std::span<const std::byte> r_span_;  // 用于读取的视图
-    std::span<std::byte> w_span_;        // 用于写入的视图
+    ConstByteSpan r_span_;  // 用于读取的视图
+    ByteSpan w_span_;       // 用于写入的视图
     std::size_t offset_ = 0;
 };
 
 // --- CRC32 校验和计算 ---
-std::uint32_t calculate_crc32(std::span<const std::byte> data);
+std::uint32_t calculate_crc32(ConstByteSpan data);
 
 template <typename T>
 bool BytesBufferView::write_object_view(BytesBufferView& view, const T& value) {
@@ -75,7 +79,7 @@ bool BytesBufferView::write_object_view(BytesBufferView& view, const T& value) {
 }
 
 template <typename T>
-auto BytesBufferView::read_object_view(BytesBufferView& view) -> std::expected<T, std::string> {
+auto BytesBufferView::read_object_view(BytesBufferView& view) -> Result<T> {
     if (view.get_offset() + sizeof(T) > view.r_span_.size()) {
         return std::unexpected("Read out of bounds");
     }

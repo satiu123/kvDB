@@ -12,8 +12,11 @@ import std;
 import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
+import kvdb.core.types;
 
 namespace kvdb::core::io {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
 File::File(IOUring& ring, std::string_view path, FileMode mode)
     : ring_(&ring), path_(path), mode_(mode) {}
 
@@ -91,13 +94,13 @@ File& File::operator=(File&& other) noexcept {
 }
 
 // 异步读取
-auto File::read(std::span<std::byte> buffer, std::uint64_t offset) -> ReadAwaiter {
+auto File::read(ByteSpan buffer, std::uint64_t offset) -> ReadAwaiter {
     open_if_needed();
     return ring_->submit_read(fd_, buffer, offset);
 }
 
 // 异步写入
-auto File::write(std::span<const std::byte> buffer, std::int64_t offset) -> WriteAwaiter {
+auto File::write(ConstByteSpan buffer, std::int64_t offset) -> WriteAwaiter {
     open_if_needed();
 
     std::uint64_t write_offset = 0;
@@ -131,8 +134,7 @@ void File::remove(const std::string& path) {
     if (::remove(path.c_str()) != 0) {
         // 如果文件不存在，我们不认为这是一个需要抛出异常的错误
         if (errno != ENOENT) {
-            throw std::system_error(errno, std::generic_category(),
-                                    "删除文件失败: " + path);
+            throw std::system_error(errno, std::generic_category(), "删除文件失败: " + path);
         }
     }
 }

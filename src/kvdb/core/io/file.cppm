@@ -4,8 +4,11 @@ import std;
 import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
+import kvdb.core.types;
 
 export namespace kvdb::core::io {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
 // 导出文件打开模式的枚举类
 enum class FileMode : std::uint8_t {
     Read,      // 只读
@@ -32,11 +35,10 @@ class File {
     File& operator=(File&& other) noexcept;
 
     // 异步读取
-    [[nodiscard]] auto read(std::span<std::byte> buffer, std::uint64_t offset) -> ReadAwaiter;
+    [[nodiscard]] auto read(ByteSpan buffer, std::uint64_t offset) -> ReadAwaiter;
 
     // 异步写入 (offset = -1 表示追加)
-    [[nodiscard]] auto write(std::span<const std::byte> buffer, std::int64_t offset)
-        -> WriteAwaiter;
+    [[nodiscard]] auto write(ConstByteSpan buffer, std::int64_t offset) -> WriteAwaiter;
 
     [[nodiscard]] int getFd() const;
 

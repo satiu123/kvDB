@@ -2,15 +2,21 @@ export module kvdb.core:async_database;
 
 import std;
 import kvdb.core.coro.task;
+import kvdb.core.types;
 import kvdb.core.database.async_manifest;
 import kvdb.storage.wal.async_wal;
 import kvdb.core.database.manifest;
 import kvdb.core.coro.task;
 import kvdb.storage.sstable;
+import kvdb.core.types;
 
 import kvdb.core.io.io_uring;
 using kvdb::core::coro::Task;
 export namespace kvdb::core {
+// 引入常用别名，避免到处写全限定名
+using kvdb::core::types::KeyView;
+using kvdb::core::types::OrderedKVMap;
+using kvdb::core::types::ValueView;
 
 class AsyncDatabase {
   public:
@@ -23,14 +29,14 @@ class AsyncDatabase {
     AsyncDatabase& operator=(AsyncDatabase&&) = delete;
 
     // 异步操作
-    auto async_put(std::string_view key, std::string_view value) -> kvdb::core::coro::Task<bool>;
-    auto async_get(std::string_view key) -> kvdb::core::coro::Task<std::optional<std::string>>;
-    auto async_remove(std::string_view key) -> kvdb::core::coro::Task<bool>;
-    auto init() -> kvdb::core::coro::Task<void>;
+    auto async_put(KeyView key, ValueView value) -> Task<bool>;
+    auto async_get(KeyView key) -> Task<std::optional<std::string>>;
+    auto async_remove(KeyView key) -> Task<bool>;
+    auto init() -> Task<void>;
 
     // 运行一个异步任务直到完成
     template <typename T>
-    auto run(kvdb::core::coro::Task<T>&& task) -> T {
+    auto run(Task<T>&& task) -> T {
         // 启动任务
         task.resume();
 
@@ -39,8 +45,10 @@ class AsyncDatabase {
             ring_->wait_for_completion();
         }
 
-        // 如果任务有返回值，则返回
-        if constexpr (!std::is_void_v<T>) {
+        // 始终调用 get() 以获取结果并传播异常（void 任务也需要调用以抛出异常）
+        if constexpr (std::is_void_v<T>) {
+            task.get();
+        } else {
             return task.get();
         }
     }
@@ -49,6 +57,8 @@ class AsyncDatabase {
     void printManifest() const;
     Task<void> printWALRecords() const;
     Task<void> printSSTables() const;
+    // 触发对当前所有SSTable的压缩合并
+    Task<void> compact_sstables();
     // 获取内部的ring，供内部组件使用
     auto get_ring() -> kvdb::core::io::IOUring& {
         return *ring_;
@@ -61,9 +71,9 @@ class AsyncDatabase {
     Task<void> flush_memtable_to_sstable();
     std::unique_ptr<kvdb::core::io::IOUring> ring_;  // 拥有所有权
     // 可变内存表
-    std::map<std::string, std::string, std::less<>> memtable_;
+    OrderedKVMap memtable_;
     // 不可变内存表
-    std::unique_ptr<std::map<std::string, std::string, std::less<>>> immutable_memtable_;
+    std::unique_ptr<OrderedKVMap> immutable_memtable_;
 
     std::string sstables_path_;
     std::vector<std::unique_ptr<storage::SSTable>> sstables_;

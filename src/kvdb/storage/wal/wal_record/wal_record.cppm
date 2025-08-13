@@ -1,8 +1,14 @@
 export module kvdb.storage.wal.wal_record;
 
 import std;
+import kvdb.core.types;
 
 export namespace kvdb::storage {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
+using kvdb::core::types::KeyView;
+using kvdb::core::types::Result;
+using kvdb::core::types::ValueView;
 
 // WAL记录操作类型
 enum class WalOpType : std::uint8_t {
@@ -20,16 +26,14 @@ enum class WalOpType : std::uint8_t {
 class WalRecord {
   public:
     // 构造函数 - 用于创建准备序列化的记录
-    explicit WalRecord(WalOpType op_type, std::string_view key, std::string_view value,
+    explicit WalRecord(WalOpType op_type, KeyView key, ValueView value,
                        std::uint64_t sequence_number);
 
     // 从二进制数据反序列化一条记录，返回一个视图化的WalRecord
-    static auto deserialize(std::span<const std::byte> data)
-        -> std::expected<WalRecord, std::string>;
+    static auto deserialize(ConstByteSpan data) -> Result<WalRecord>;
 
     // 序列化记录到给定的缓冲区
-    auto serialize_to(std::span<std::byte> target_buffer) const
-        -> std::expected<std::size_t, std::string>;
+    auto serialize_to(ByteSpan target_buffer) const -> Result<std::size_t>;
 
     // 获取记录序列化后所需的总大小
     std::size_t size() const;
@@ -56,7 +60,7 @@ class WalRecord {
 
   private:
     // 私有构造函数，用于反序列化
-    explicit WalRecord(WalOpType op_type, std::string_view key, std::string_view value,
+    explicit WalRecord(WalOpType op_type, KeyView key, ValueView value,
                        std::uint64_t sequence_number, std::uint32_t checksum);
 
     WalOpType op_type_;

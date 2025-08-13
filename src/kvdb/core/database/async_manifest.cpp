@@ -4,9 +4,11 @@ import std;
 import kvdb.core.io.file;
 import kvdb.core.database.manifest;
 import kvdb.logging.log;
+import kvdb.core.types;
 
 using kvdb::core::coro::Task;
 using kvdb::core::io::FileMode;
+using kvdb::core::types::Result;
 using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
     kvdb::logging::LOG_WARNING;
 
@@ -23,7 +25,7 @@ AsyncManifestFile::AsyncManifestFile(IOUring& ring, const std::filesystem::path&
     LOG_INFO()("异步Manifest文件处理器已为路径'{}'初始化", manifest_path_.string());
 }
 
-auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string>> {
+auto AsyncManifestFile::async_load() -> Task<Result<Manifest>> {
     if (!ring_) {
         LOG_ERROR()("IOUring尚未初始化，无法进行异步加载");
         co_return std::unexpected("IOUring尚未初始化");
@@ -68,8 +70,7 @@ auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string
     co_return manifest;
 }
 
-auto AsyncManifestFile::async_store(const Manifest& manifest)
-    -> kvdb::core::coro::Task<std::expected<void, std::string>> {
+auto AsyncManifestFile::async_store(const Manifest& manifest) -> Task<Result<void>> {
     if (!ring_) {
         LOG_ERROR()("IOUring尚未初始化，无法进行异步存储");
         co_return std::unexpected("IOUring尚未初始化");

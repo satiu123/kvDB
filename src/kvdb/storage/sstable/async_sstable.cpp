@@ -8,11 +8,15 @@ import kvdb.storage.bloom_filter;
 import kvdb.core.cache;
 import kvdb.core.coro.task;
 import kvdb.core.io.io_uring;
+import kvdb.core.types;
 
 using kvdb::core::binary::BytesBufferView;
 using kvdb::core::coro::Task;
 using kvdb::core::io::FileMode;
 using kvdb::core::io::IOUring;
+using kvdb::core::types::KeyView;
+using kvdb::core::types::OrderedKVMap;
+using kvdb::core::types::ValueView;
 using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
     kvdb::logging::LOG_WARNING;
 
@@ -28,7 +32,7 @@ SSTable::Builder::Builder(IOUring& ring, std::string_view path, std::size_t bloc
     LOG_DEBUG()("SSTable Builder为'{}'创建", path_);
 }
 
-Task<void> SSTable::Builder::add(std::string_view key, std::string_view value) {
+Task<void> SSTable::Builder::add(KeyView key, ValueView value) {
     std::string entry_buffer;
     entry_buffer.resize(sizeof(std::uint32_t) + key.size() + sizeof(std::uint32_t) + value.size());
     BytesBufferView view(std::as_writable_bytes(std::span{entry_buffer}));
@@ -55,7 +59,7 @@ Task<void> SSTable::Builder::writeBlock() {
     current_block_data_.clear();
 }
 
-Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std::less<>>& data) {
+Task<bool> SSTable::Builder::finish(const OrderedKVMap& data) {
     if (!current_block_data_.empty()) {
         co_await writeBlock();
     }
@@ -105,8 +109,7 @@ Task<bool> SSTable::Builder::finish(const std::map<std::string, std::string, std
     co_return true;
 }
 
-Task<bool> SSTable::buildFrom(IOUring& ring, std::string_view path,
-                              const std::map<std::string, std::string, std::less<>>& data) {
+Task<bool> SSTable::buildFrom(IOUring& ring, std::string_view path, const OrderedKVMap& data) {
     if (data.empty()) {
         LOG_WARNING()("尝试从空数据构建SSTable，已跳过: {}", path);
         co_return false;
@@ -207,7 +210,7 @@ Task<bool> SSTable::loadIndex() {
     co_return true;
 }
 
-Task<std::optional<std::string>> SSTable::find(std::string_view key) {
+Task<std::optional<std::string>> SSTable::find(KeyView key) {
     if (bloom_filter_ && !bloom_filter_->contains(key)) {
         LOG_DEBUG()("布隆过滤器未命中，跳过SSTable '{}' 的搜索，键: {}", path_, key);
         co_return std::nullopt;
@@ -237,7 +240,7 @@ Task<std::optional<std::string>> SSTable::find(std::string_view key) {
             co_return std::nullopt;
         }
 
-        auto new_block_map = std::make_shared<std::map<std::string, std::string, std::less<>>>();
+        auto new_block_map = std::make_shared<OrderedKVMap>();
         BytesBufferView view(std::as_bytes(std::span{block_data}));
         while (view.get_offset() < block_data.size()) {
             auto key_res = view.read_string_view();

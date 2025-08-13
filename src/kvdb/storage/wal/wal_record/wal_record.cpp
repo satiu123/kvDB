@@ -2,8 +2,12 @@ module kvdb.storage.wal.wal_record;
 
 import std;
 import kvdb.core.binary;
+import kvdb.core.types;
 
 using kvdb::core::binary::BytesBufferView;
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
+using kvdb::core::types::Result;
 
 namespace kvdb::storage {
 
@@ -15,7 +19,8 @@ static std::uint32_t calculate_payload_checksum(WalOpType op_type, std::string_v
                                (sizeof(std::uint32_t) + value.size()) + sizeof(std::uint64_t);
     std::vector<std::byte> temp_buffer(payload_size);
     // 显式创建可写 span 以消除构造函数歧义
-    BytesBufferView temp_buf_view(std::span<std::byte>{temp_buffer});
+    ByteSpan tmp_span{temp_buffer.data(), temp_buffer.size()};
+    BytesBufferView temp_buf_view(tmp_span);
 
     temp_buf_view.write_uint8(static_cast<std::uint8_t>(op_type));
     temp_buf_view.write_string(key);
@@ -45,8 +50,7 @@ WalRecord::WalRecord(WalOpType op_type, std::string_view key, std::string_view v
 
 // --- 核心 API ---
 
-auto WalRecord::deserialize(std::span<const std::byte> data)
-    -> std::expected<WalRecord, std::string> {
+auto WalRecord::deserialize(ConstByteSpan data) -> Result<WalRecord> {
     if (data.empty()) {
         return std::unexpected("无法从空数据反序列化");
     }
@@ -88,8 +92,7 @@ auto WalRecord::deserialize(std::span<const std::byte> data)
                      *stored_crc_res);
 }
 
-auto WalRecord::serialize_to(std::span<std::byte> target_buffer) const
-    -> std::expected<std::size_t, std::string> {
+auto WalRecord::serialize_to(ByteSpan target_buffer) const -> Result<std::size_t> {
     const auto required_size = size();
     if (target_buffer.size() < required_size) {
         return std::unexpected("目标缓冲区太小");
@@ -110,7 +113,7 @@ auto WalRecord::serialize_to(std::span<std::byte> target_buffer) const
 std::size_t WalRecord::size() const {
     std::size_t payload_size = sizeof(std::uint8_t) + (sizeof(std::uint32_t) + key_.size()) +
                                (sizeof(std::uint32_t) + value_.size()) + sizeof(std::uint64_t);
-    return sizeof(std::uint32_t) * 2 + payload_size;
+    return (sizeof(std::uint32_t) * 2) + payload_size;
 }
 
 // --- 其他辅助函数 ---

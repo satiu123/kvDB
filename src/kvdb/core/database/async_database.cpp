@@ -9,8 +9,12 @@ import kvdb.storage.wal.async_wal;
 import kvdb.storage.wal.wal_record;
 import kvdb.logging.log;
 import kvdb.storage.sstable;
+import kvdb.core.types;
 
 using kvdb::core::coro::Task;
+using kvdb::core::types::KeyView;
+using kvdb::core::types::OrderedKVMap;
+using kvdb::core::types::ValueView;
 using kvdb::logging::LOG_DEBUG;
 using kvdb::logging::LOG_ERROR;
 using kvdb::logging::LOG_INFO;
@@ -20,16 +24,18 @@ using kvdb::storage::WalOpType;
 namespace kvdb::core {
 
 // 从SSTable文件名（如 "sstable-000001.sst"）中提取编号
+namespace {
+
 int get_sstable_number(const std::string& filename) {
-    auto first = filename.find_first_of("-");
-    auto last = filename.find_last_of(".");
+    auto first = filename.find_first_of('-');
+    auto last = filename.find_last_of('.');
     if (first == std::string::npos || last == std::string::npos) {
         return 0;
     }
     std::string number_str = filename.substr(first + 1, last - first - 1);
     return std::stoi(number_str);
 }
-
+}  // namespace
 AsyncDatabase::AsyncDatabase(std::string_view base_path)
     : ring_(std::make_unique<io::IOUring>(1024)),
       wal_(std::make_unique<storage::AsyncWal>(*ring_, base_path)),
@@ -40,7 +46,7 @@ AsyncDatabase::AsyncDatabase(std::string_view base_path)
     LOG_INFO()("异步数据库已在 '{}' 初始化", std::string(base_path));
 }
 
-auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
+auto AsyncDatabase::init() -> Task<void> {
     LOG_INFO()("开始数据库初始化...");
     // 1. 异步加载 Manifest
     LOG_DEBUG()("正在加载 MANIFEST 文件...");
@@ -102,8 +108,7 @@ auto AsyncDatabase::init() -> kvdb::core::coro::Task<void> {
     LOG_INFO()("数据库初始化完成");
 }
 
-auto AsyncDatabase::async_put(std::string_view key, std::string_view value)
-    -> kvdb::core::coro::Task<bool> {
+auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
     bool wal_ok = co_await wal_->async_append_put(key, value);
     if (!wal_ok) {
         LOG_ERROR()("向 WAL 写入 PUT 操作失败，键: {}", key);
@@ -120,8 +125,7 @@ auto AsyncDatabase::async_put(std::string_view key, std::string_view value)
     co_return true;
 }
 
-auto AsyncDatabase::async_get(std::string_view key)
-    -> kvdb::core::coro::Task<std::optional<std::string>> {
+auto AsyncDatabase::async_get(KeyView key) -> Task<std::optional<std::string>> {
     // 首先在可变 MemTable 中查找
     if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
         LOG_DEBUG()("在 MemTable 中找到键: {}, 值: {}", key, it->second);
@@ -159,7 +163,7 @@ auto AsyncDatabase::async_get(std::string_view key)
 }
 
 
-auto AsyncDatabase::async_remove(std::string_view key) -> kvdb::core::coro::Task<bool> {
+auto AsyncDatabase::async_remove(KeyView key) -> Task<bool> {
     auto exists = co_await async_get(key);
     if (!exists) {
         LOG_DEBUG()("尝试删除的键不存在: {}", key);
@@ -181,7 +185,7 @@ auto AsyncDatabase::async_remove(std::string_view key) -> kvdb::core::coro::Task
 
 Task<void> AsyncDatabase::flush_memtable_to_sstable() {
     LOG_INFO()("开始将 MemTable 刷写到 SSTable...");
-    immutable_memtable_ = std::make_unique<std::map<std::string, std::string, std::less<>>>();
+    immutable_memtable_ = std::make_unique<OrderedKVMap>();
     std::swap(memtable_, *immutable_memtable_);
     LOG_DEBUG()("MemTable 已交换为不可变 MemTable，大小为 {}", immutable_memtable_->size());
 

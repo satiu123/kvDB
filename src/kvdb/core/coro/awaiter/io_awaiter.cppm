@@ -2,6 +2,7 @@ export module kvdb.core.coro.awaiter.io_awaiter;
 
 import std;
 import kvdb.core.coro.task;
+import kvdb.core.types;
 
 // 导出一个基类 Awaiter，包含通用功能
 export class BaseAwaiter {
@@ -31,7 +32,8 @@ export class BaseAwaiter {
 export class [[nodiscard]] ReadAwaiter : public BaseAwaiter {
   public:
     // 构造函数，初始化 Awaiter
-    explicit ReadAwaiter(void* ring, int fd, std::span<std::byte> buffer, std::uint64_t offset)
+    explicit ReadAwaiter(void* ring, int fd, kvdb::core::types::ByteSpan buffer,
+                         std::uint64_t offset)
         : BaseAwaiter(ring), fd_(fd), buffer_(buffer), offset_(offset) {}
 
     // 挂起协程并提交IO请求
@@ -44,7 +46,7 @@ export class [[nodiscard]] ReadAwaiter : public BaseAwaiter {
 
   private:
     int fd_;
-    std::span<std::byte> buffer_;
+    kvdb::core::types::ByteSpan buffer_;
     std::uint64_t offset_;
 };
 
@@ -52,7 +54,7 @@ export class [[nodiscard]] ReadAwaiter : public BaseAwaiter {
 export class [[nodiscard]] WriteAwaiter : public BaseAwaiter {
   public:
     // 构造函数，初始化 Awaiter
-    explicit WriteAwaiter(void* ring, int fd, std::span<const std::byte> buffer,
+    explicit WriteAwaiter(void* ring, int fd, kvdb::core::types::ConstByteSpan buffer,
                           std::uint64_t offset)
         : BaseAwaiter(ring), fd_(fd), buffer_(buffer), offset_(offset) {}
 
@@ -66,7 +68,7 @@ export class [[nodiscard]] WriteAwaiter : public BaseAwaiter {
 
   private:
     int fd_;
-    std::span<const std::byte> buffer_;
+    kvdb::core::types::ConstByteSpan buffer_;
     std::uint64_t offset_;
 };
 

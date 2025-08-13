@@ -5,10 +5,14 @@ import kvdb.core.io.io_uring;
 import kvdb.core.io.file;
 import kvdb.core.coro.task;
 import kvdb.storage.wal.wal_record;
+import kvdb.core.types;
 
 using kvdb::core::coro::Task;
 using kvdb::core::io::File;
 using kvdb::core::io::IOUring;
+using kvdb::core::types::KeyView;
+using kvdb::core::types::Result;
+using kvdb::core::types::ValueView;
 
 export namespace kvdb::storage {
 
@@ -21,21 +25,21 @@ class AsyncWal {
     ~AsyncWal() = default;
 
     // --- 异步 API ---
-    Task<bool> async_append_put(std::string_view key, std::string_view value);
-    Task<bool> async_append_remove(std::string_view key);
+    Task<bool> async_append_put(KeyView key, ValueView value);
+    Task<bool> async_append_remove(KeyView key);
     Task<bool> async_append_clear();
     Task<bool> async_append_record(const WalRecord& record);
     Task<bool> async_replay(const std::function<bool(const WalRecord&)>& handler);
-    Task<std::expected<WalRecord, std::string>> async_read_next_record();
+    Task<Result<WalRecord>> async_read_next_record();
 
     // --- 通用 API ---
     std::uint64_t getLastSequenceNumber() const;
     void setCurrentSequenceNumber(std::uint64_t seq);
-    auto getFormattedContent() -> Task<std::expected<std::vector<std::string>, std::string>>;
+    auto getFormattedContent() -> Task<Result<std::vector<std::string>>>;
 
   private:
     // 填充读取缓冲区
-    Task<std::expected<std::size_t, std::string>> fill_read_buffer();
+    Task<Result<std::size_t>> fill_read_buffer();
 
     IOUring* ring_{nullptr};
     File wal_file_;

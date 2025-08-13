@@ -8,7 +8,10 @@ module kvdb.core.io.io_uring;
 
 import std;
 import kvdb.core.coro.awaiter.io_awaiter;
+import kvdb.core.types;
 namespace kvdb::core::io {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
 
 // IOUring类的构造函数
 // 初始化io_uring实例
@@ -34,14 +37,12 @@ IOUring::~IOUring() {
 }
 
 // 提交读请求
-auto IOUring::submit_read(int fd, std::span<std::byte> buffer, std::uint64_t offset)
-    -> ReadAwaiter {
+auto IOUring::submit_read(int fd, ByteSpan buffer, std::uint64_t offset) -> ReadAwaiter {
     return ReadAwaiter{this, fd, buffer, offset};
 }
 
 // 提交写请求
-auto IOUring::submit_write(int fd, std::span<const std::byte> buffer, std::uint64_t offset)
-    -> WriteAwaiter {
+auto IOUring::submit_write(int fd, ConstByteSpan buffer, std::uint64_t offset) -> WriteAwaiter {
     return WriteAwaiter{this, fd, buffer, offset};
 }
 
@@ -77,7 +78,7 @@ void IOUring::wait_for_completion() {
     }
 }
 
-void IOUring::submit_read_request(int fd, std::span<std::byte> buffer, std::uint64_t offset,
+void IOUring::submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset,
                                   std::uint64_t user_data) {
     // 从io_uring获取一个提交队列条目(SQE)
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));
@@ -109,7 +110,7 @@ void IOUring::submit_nop_request(std::uint64_t user_data) {
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(user_data));
 }
 
-void IOUring::submit_write_request(int fd, std::span<const std::byte> buffer, std::uint64_t offset,
+void IOUring::submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset,
                                    std::uint64_t user_data) {
     // 从io_uring获取一个提交队列条目(SQE)
     io_uring_sqe* sqe = io_uring_get_sqe(static_cast<io_uring*>(ring_));

@@ -5,9 +5,14 @@ import kvdb.logging.log;
 import kvdb.core.io.file;
 import kvdb.storage.wal.wal_record;
 import kvdb.core.coro.task;
+import kvdb.core.types;
 
 using kvdb::core::coro::Task;
 using kvdb::core::io::FileMode;
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::KeyView;
+using kvdb::core::types::Result;
+using kvdb::core::types::ValueView;
 using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO;
 
 namespace kvdb::storage {
@@ -26,13 +31,13 @@ AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
 
 // --- 异步写入 API ---
 
-Task<bool> AsyncWal::async_append_put(std::string_view key, std::string_view value) {
+Task<bool> AsyncWal::async_append_put(KeyView key, ValueView value) {
     WalRecord record(WalOpType::PUT, key, value, ++sequence_number_);
     LOG_DEBUG()("追加PUT记录到WAL: key={}, seq={}", key, sequence_number_.load());
     co_return co_await async_append_record(record);
 }
 
-Task<bool> AsyncWal::async_append_remove(std::string_view key) {
+Task<bool> AsyncWal::async_append_remove(KeyView key) {
     WalRecord record(WalOpType::REMOVE, key, "", ++sequence_number_);
     LOG_DEBUG()("追加REMOVE记录到WAL: key={}, seq={}", key, sequence_number_.load());
     co_return co_await async_append_record(record);
@@ -55,7 +60,7 @@ Task<bool> AsyncWal::async_append_record(const WalRecord& record) {
     }
 
     auto write_result = co_await wal_file_.write(temp_buffer, -1);
-    if (write_result < 0) { // 检查小于0的错误码
+    if (write_result < 0) {  // 检查小于0的错误码
         LOG_ERROR()("异步写入WAL文件失败，错误码: {}", write_result);
         co_return false;
     }
@@ -90,7 +95,7 @@ Task<bool> AsyncWal::async_replay(const std::function<bool(const WalRecord&)>& h
     co_return true;
 }
 
-Task<std::expected<WalRecord, std::string>> AsyncWal::async_read_next_record() {
+Task<Result<WalRecord>> AsyncWal::async_read_next_record() {
     // 1. 检查缓冲区是否需要填充
     if (buffer_pos_ + sizeof(std::uint32_t) > buffer_valid_size_) {
         auto fill_res = co_await fill_read_buffer();
@@ -121,7 +126,7 @@ Task<std::expected<WalRecord, std::string>> AsyncWal::async_read_next_record() {
     }
 
     // 4. 反序列化
-    auto record_span = std::span{read_buffer_.data() + buffer_pos_, record_size};
+    auto record_span = ByteSpan{read_buffer_}.subspan(buffer_pos_, record_size);
     auto record_result = WalRecord::deserialize(record_span);
     if (!record_result) {
         co_return std::unexpected(record_result.error());
@@ -134,7 +139,7 @@ Task<std::expected<WalRecord, std::string>> AsyncWal::async_read_next_record() {
 
 // --- 私有辅助函数 ---
 
-Task<std::expected<std::size_t, std::string>> AsyncWal::fill_read_buffer() {
+Task<Result<std::size_t>> AsyncWal::fill_read_buffer() {
     // 将未处理的数据移动到缓冲区开头
     if (buffer_pos_ > 0 && buffer_pos_ < buffer_valid_size_) {
         std::memmove(read_buffer_.data(), read_buffer_.data() + buffer_pos_,
@@ -149,11 +154,10 @@ Task<std::expected<std::size_t, std::string>> AsyncWal::fill_read_buffer() {
     }
 
     // 从文件填充缓冲区的剩余空间
-    std::span<std::byte> write_span(read_buffer_.data() + buffer_valid_size_,
-                                    read_buffer_.size() - buffer_valid_size_);
+    ByteSpan write_span = ByteSpan{read_buffer_}.subspan(buffer_valid_size_);
     auto read_res = co_await wal_file_.read(write_span, file_read_offset_);
 
-    if (read_res < 0) { // 小于0表示错误
+    if (read_res < 0) {  // 小于0表示错误
         if (buffer_valid_size_ == 0) {
             co_return 0;  // 如果之前没有数据，认为是正常的EOF
         }
@@ -178,7 +182,7 @@ void AsyncWal::setCurrentSequenceNumber(std::uint64_t seq) {
     sequence_number_ = seq;
 }
 
-auto AsyncWal::getFormattedContent() -> Task<std::expected<std::vector<std::string>, std::string>> {
+auto AsyncWal::getFormattedContent() -> Task<Result<std::vector<std::string>>> {
     std::vector<std::string> lines;
     auto original_state = std::make_tuple(file_read_offset_, buffer_pos_, buffer_valid_size_);
 
