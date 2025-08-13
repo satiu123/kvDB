@@ -8,6 +8,7 @@ import kvdb.core.coro.task;
 import kvdb.core.types;
 
 using kvdb::core::coro::Task;
+using kvdb::core::io::File;
 using kvdb::core::io::FileMode;
 using kvdb::core::types::ByteSpan;
 using kvdb::core::types::KeyView;
@@ -21,7 +22,8 @@ namespace kvdb::storage {
 
 AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
     : ring_(&ring),
-      wal_file_(ring, path.string() + "/wal/kvdb.wal", FileMode::ReadWrite),
+      wal_path_(path / "wal" / "kvdb.wal"),
+      wal_file_(ring, wal_path_, FileMode::ReadWrite),
       read_buffer_(READ_BUFFER_SIZE) {  // 初始化缓冲区大小
     if (!std::filesystem::exists(path / "wal")) {
         std::filesystem::create_directories(path / "wal");
@@ -180,6 +182,18 @@ std::uint64_t AsyncWal::getLastSequenceNumber() const {
 
 void AsyncWal::setCurrentSequenceNumber(std::uint64_t seq) {
     sequence_number_ = seq;
+}
+
+void AsyncWal::truncate() {
+    // 删除旧 WAL 文件
+    File::remove(wal_path_);
+    // 用空文件替换，并保持 wal_file_ 为可读写以供后续 append
+    File new_file(*ring_, wal_path_, FileMode::ReadWrite);
+    wal_file_ = std::move(new_file);
+    // 重置读取与序列号状态
+    file_read_offset_ = 0;
+    buffer_pos_ = 0;
+    buffer_valid_size_ = 0;
 }
 
 auto AsyncWal::getFormattedContent() -> Task<Result<std::vector<std::string>>> {

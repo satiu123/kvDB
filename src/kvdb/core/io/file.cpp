@@ -134,7 +134,7 @@ void File::remove(const std::string& path) {
     if (::remove(path.c_str()) != 0) {
         // 如果文件不存在，我们不认为这是一个需要抛出异常的错误
         if (errno != ENOENT) {
-            throw std::system_error(errno, std::generic_category(), "删除文件失败: " + path);
+            throw std::system_error(errno, std::generic_category(), "删除文件失败");
         }
     }
 }

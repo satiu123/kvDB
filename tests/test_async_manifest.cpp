@@ -27,7 +27,7 @@ TEST(AsyncManifest, StoreThenLoad) {
     // prepare manifest
     Manifest m;
     m.last_wal_sequence_number = 42;
-    m.sstables[0] = {(base / "sstables" / "sstable-000001.sst").string()};
+    m.sstables[0] = {(base / "sstables" / "L0" / "sstable-L0-000001.sst").string()};
 
     // store
     auto st = mf.async_store(m);

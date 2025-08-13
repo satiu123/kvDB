@@ -48,6 +48,7 @@ class File {
     // 静态方法，用于删除文件
     static void remove(const std::string& path);
 
+
   private:
     void open_if_needed();
 

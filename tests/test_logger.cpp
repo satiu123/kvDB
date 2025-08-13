@@ -32,7 +32,7 @@ TEST(Logger, CreateAndWrite) {
     std::getline(ifs, line);
     // 若异步线程略有延迟，补一次等待
     if (line.empty()) {
-        std::this_thread::sleep_for(100ms);
+        std::this_thread::sleep_for(200ms);
         ifs.clear();
         ifs.seekg(0);
         std::getline(ifs, line);

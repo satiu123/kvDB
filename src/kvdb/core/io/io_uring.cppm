@@ -3,12 +3,13 @@ export module kvdb.core.io.io_uring;
 import std;
 import kvdb.core.coro.awaiter.io_awaiter;
 import kvdb.core.types;
+import kvdb.core.io.ring_api;
 export namespace kvdb::core::io {
 using kvdb::core::types::ByteSpan;
 using kvdb::core::types::ConstByteSpan;
 
 // 导出IOUring类，封装io_uring的核心功能
-class IOUring {
+class IOUring : public ISubmitter {
   public:
     // 构造函数，初始化一个指定队列深度的io_uring实例
     explicit IOUring(unsigned int queue_depth);
@@ -46,9 +47,11 @@ class IOUring {
     bool wait_for_completion_for(std::uint32_t timeout_ms);
 
     // 供 Awaiter 调用的内部方法
-    void submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset, void* user_data);
-    void submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset, void* user_data);
-    void submit_nop_request(void* user_data);
+    void submit_read_request(int fd, ByteSpan buffer, std::uint64_t offset,
+                             void* user_data) override;
+    void submit_write_request(int fd, ConstByteSpan buffer, std::uint64_t offset,
+                              void* user_data) override;
+    void submit_nop_request(void* user_data) override;
 
   private:
     // 实际提交所有准备好的请求到内核

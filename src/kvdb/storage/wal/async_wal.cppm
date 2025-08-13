@@ -35,6 +35,8 @@ class AsyncWal {
     // --- 通用 API ---
     std::uint64_t getLastSequenceNumber() const;
     void setCurrentSequenceNumber(std::uint64_t seq);
+    // 截断WAL文件（清空），用于在数据安全落盘后回收WAL
+    void truncate();
     auto getFormattedContent() -> Task<Result<std::vector<std::string>>>;
 
   private:
@@ -42,11 +44,13 @@ class AsyncWal {
     Task<Result<std::size_t>> fill_read_buffer();
 
     IOUring* ring_{nullptr};
+    std::string wal_path_;
     File wal_file_;
     std::atomic<std::uint64_t> sequence_number_{0};
 
     // --- 读取状态 ---
-    static constexpr std::size_t READ_BUFFER_SIZE = 8 * 1024 * 1024;  // 8MB
+    static constexpr std::size_t READ_BUFFER_SIZE =
+        static_cast<std::size_t>(8) * 1024 * 1024;  // 8MB
     std::vector<std::byte> read_buffer_;
     std::uint64_t file_read_offset_ = 0;
     std::size_t buffer_pos_ = 0;

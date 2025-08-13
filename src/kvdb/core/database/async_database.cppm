@@ -77,7 +77,7 @@ class AsyncDatabase {
 
     std::string sstables_path_;
     std::vector<std::unique_ptr<storage::SSTable>> sstables_;
-    std::uint64_t max_sstable_num_ = 0;
+    std::uint64_t max_sstable_num_ = 10;    // 最大SSTable数量
     std::uint64_t flush_threshold_ = 1024;  // 1MB
     std::unique_ptr<storage::AsyncWal> wal_;
     std::unique_ptr<database::AsyncManifestFile> manifest_;

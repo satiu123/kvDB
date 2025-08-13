@@ -35,13 +35,21 @@ TEST(AsyncDatabase, StressFlushAndReadBack) {
         EXPECT_EQ(*val, std::string("v") + std::to_string(i));
     }
 
-    // 检查 sstables 目录是否有文件生成
+    // 检查 sstables 目录是否有文件生成（支持按 Level 子目录）
     auto sst_dir = base / "sstables";
     ASSERT_TRUE(std::filesystem::exists(sst_dir));
     size_t file_count = 0;
-    for (auto& e : std::filesystem::directory_iterator(sst_dir)) {
-        if (e.is_regular_file())
-            ++file_count;
+    if (std::filesystem::exists(sst_dir / "L0")) {
+        for (const auto& e : std::filesystem::directory_iterator(sst_dir / "L0")) {
+            if (e.is_regular_file())
+                ++file_count;
+        }
     }
-    EXPECT_GT(file_count, 0u);
+    if (file_count == 0) {
+        for (const auto& e : std::filesystem::recursive_directory_iterator(sst_dir)) {
+            if (e.is_regular_file())
+                ++file_count;
+        }
+    }
+    EXPECT_GT(file_count, 0U);
 }
