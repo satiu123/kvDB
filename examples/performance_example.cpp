@@ -57,9 +57,26 @@ auto test_put(kvdb::core::AsyncDatabase* db, std::span<const std::string> keys,
 auto test_get(kvdb::core::AsyncDatabase& db, std::span<const std::string> keys)
     -> kvdb::core::coro::Task<void> {
     auto start_read = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < num_operations; ++i) {
-        auto value = co_await db.async_get(keys[i]);
+
+    // 将读取操作分批处理，以控制并发量
+    constexpr std::size_t batch_size = 512;
+    for (std::size_t i = 0; i < num_operations; i += batch_size) {
+        std::size_t current_batch_size = std::min<std::size_t>(batch_size, num_operations - i);
+
+        std::vector<kvdb::core::coro::Task<std::optional<std::string>>> tasks;
+        tasks.reserve(current_batch_size);
+
+        // 启动当前批次的所有异步读取操作
+        for (std::size_t j = 0; j < current_batch_size; ++j) {
+            tasks.emplace_back(db.async_get(keys[i + j]));
+        }
+
+        // 等待当前批次的所有操作完成
+        for (auto& task : tasks) {
+            auto value = co_await std::move(task);
+        }
     }
+
     auto end_read = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> read_duration = end_read - start_read;
     double read_mbps = (static_cast<double>(num_operations) * (key_size + value_size)) /

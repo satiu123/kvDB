@@ -17,8 +17,8 @@ TEST(Binary, BufferRoundtrip) {
     std::string s = "hello";
     std::uint32_t u32 = 0x12345678;
     std::uint64_t u64 = 0x1122334455667788ULL;
-    buf.push(reinterpret_cast<const std::byte*>(&u32), sizeof(u32));
-    buf.push(reinterpret_cast<const std::byte*>(&u64), sizeof(u64));
+    buf.push(std::bit_cast<const std::byte*>(&u32), sizeof(u32));
+    buf.push(std::bit_cast<const std::byte*>(&u64), sizeof(u64));
     buf.push_string(s);
 
     auto span = buf.get_span();

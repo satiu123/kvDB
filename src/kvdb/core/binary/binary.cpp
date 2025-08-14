@@ -15,8 +15,8 @@ void BytesBuffer::push(const std::byte* bytes, std::size_t size) {
 
 void BytesBuffer::push_string(std::string_view str) {
     auto len = static_cast<std::uint32_t>(str.length());
-    push(reinterpret_cast<const std::byte*>(&len), sizeof(len));
-    push(reinterpret_cast<const std::byte*>(str.data()), str.length());
+    push(std::bit_cast<const std::byte*>(&len), sizeof(len));
+    push(std::bit_cast<const std::byte*>(str.data()), str.length());
 }
 
 // --- BytesBufferView (非拥有所有权) ---
@@ -68,7 +68,7 @@ auto BytesBufferView::read_string_view() -> Result<std::string_view> {
     if (offset_ + len > r_span_.size()) {
         return std::unexpected("字符串读取越界");
     }
-    std::string_view str(reinterpret_cast<const char*>(r_span_.data() + offset_), len);
+    std::string_view str(std::bit_cast<const char*>(r_span_.data() + offset_), len);
     offset_ += len;
     return str;
 }

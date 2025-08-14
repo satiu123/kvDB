@@ -102,7 +102,7 @@ Task<bool> SSTable::Builder::finish(const OrderedKVMap& data) {
     footer.bloom_filter_size = bloom_filter_size;
 
     co_await out_file_.write(
-        std::as_bytes(std::span{reinterpret_cast<char*>(&footer), sizeof(footer)}), offset_);
+        std::as_bytes(std::span{std::bit_cast<char*>(&footer), sizeof(footer)}), offset_);
     LOG_DEBUG()("Footer已写入SSTable: {}", path_);
 
     LOG_INFO()("SSTable '{}' 创建成功完成。", path_);
@@ -171,7 +171,7 @@ Task<bool> SSTable::loadIndex() {
     }
     auto footer_offset = file_size - sizeof(Footer);
     auto bytes_read = co_await in_file_.read(
-        std::as_writable_bytes(std::span{reinterpret_cast<char*>(&footer_), sizeof(Footer)}),
+        std::as_writable_bytes(std::span{std::bit_cast<char*>(&footer_), sizeof(Footer)}),
         footer_offset);
 
     if (static_cast<std::uint64_t>(bytes_read) != sizeof(Footer)) {

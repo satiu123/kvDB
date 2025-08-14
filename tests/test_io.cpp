@@ -57,6 +57,6 @@ TEST(IO, FileReadWrite) {
     }
     auto rres = rt.get();
     ASSERT_EQ(rres, static_cast<int>(payload.size()));
-    std::string roundtrip(reinterpret_cast<char*>(r.data()), r.size());
+    std::string roundtrip(std::bit_cast<char*>(r.data()), r.size());
     EXPECT_EQ(roundtrip, payload);
 }

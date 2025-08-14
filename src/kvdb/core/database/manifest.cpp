@@ -15,16 +15,16 @@ auto Manifest::serialize(std::ostream& os) const -> Result<void> {
     BytesBuffer buffer;
 
     // 使用 BytesBuffer 构建负载
-    buffer.push(reinterpret_cast<const std::byte*>(&last_wal_sequence_number),
+    buffer.push(std::bit_cast<const std::byte*>(&last_wal_sequence_number),
                 sizeof(last_wal_sequence_number));
     auto sstables_size = static_cast<std::uint32_t>(sstables.size());
-    buffer.push(reinterpret_cast<const std::byte*>(&sstables_size), sizeof(sstables_size));
+    buffer.push(std::bit_cast<const std::byte*>(&sstables_size), sizeof(sstables_size));
 
     for (const auto& [level, files] : sstables) {
         auto level_u32 = static_cast<std::uint32_t>(level);
         auto files_size = static_cast<std::uint32_t>(files.size());
-        buffer.push(reinterpret_cast<const std::byte*>(&level_u32), sizeof(level_u32));
-        buffer.push(reinterpret_cast<const std::byte*>(&files_size), sizeof(files_size));
+        buffer.push(std::bit_cast<const std::byte*>(&level_u32), sizeof(level_u32));
+        buffer.push(std::bit_cast<const std::byte*>(&files_size), sizeof(files_size));
         for (const auto& file : files) {
             buffer.push_string(file);
         }
@@ -35,8 +35,8 @@ auto Manifest::serialize(std::ostream& os) const -> Result<void> {
     std::uint32_t crc = binary::calculate_crc32(payload_span);
 
     // 写入 CRC 和负载到输出流
-    os.write(reinterpret_cast<const char*>(&crc), sizeof(crc));
-    os.write(reinterpret_cast<const char*>(payload_span.data()), payload_span.size());
+    os.write(std::bit_cast<const char*>(&crc), sizeof(crc));
+    os.write(std::bit_cast<const char*>(payload_span.data()), payload_span.size());
 
     if (!os) {
         return std::unexpected("无法将manifest写入输出流");
@@ -48,7 +48,7 @@ auto Manifest::serialize(std::ostream& os) const -> Result<void> {
 auto Manifest::deserialize(std::istream& is) -> Result<void> {
     // 读取 CRC
     std::uint32_t stored_crc;
-    is.read(reinterpret_cast<char*>(&stored_crc), sizeof(stored_crc));
+    is.read(std::bit_cast<char*>(&stored_crc), sizeof(stored_crc));
     if (!is) {
         return std::unexpected("无法读取manifest校验和");
     }
@@ -58,7 +58,7 @@ auto Manifest::deserialize(std::istream& is) -> Result<void> {
     if (is.bad()) {
         return std::unexpected("无法读取manifest负载");
     }
-    ConstByteSpan payload_span(reinterpret_cast<const std::byte*>(payload_str.data()),
+    ConstByteSpan payload_span(std::bit_cast<const std::byte*>(payload_str.data()),
                                payload_str.size());
 
     // 校验 CRC

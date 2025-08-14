@@ -44,7 +44,7 @@ auto AsyncManifestFile::async_load() -> Task<Result<Manifest>> {
         LOG_WARNING()("读取CURRENT文件失败或文件为空");
         co_return Manifest{};
     }
-    std::string manifest_filename(reinterpret_cast<char*>(current_buffer.data()), read_res);
+    std::string manifest_filename(std::bit_cast<char*>(current_buffer.data()), read_res);
     LOG_DEBUG()("从CURRENT文件读到Manifest文件名: {}", manifest_filename);
 
     // 2. 异步读取MANIFEST文件
@@ -59,7 +59,7 @@ auto AsyncManifestFile::async_load() -> Task<Result<Manifest>> {
     }
     // 3. 反序列化
     LOG_DEBUG()("正在反序列化MANIFEST内容");
-    std::string content(reinterpret_cast<char*>(manifest_buffer.data()), read_res);
+    std::string content(std::bit_cast<char*>(manifest_buffer.data()), read_res);
     std::stringstream ss(content);
     Manifest manifest;
     if (auto res = manifest.deserialize(ss); !res) {
