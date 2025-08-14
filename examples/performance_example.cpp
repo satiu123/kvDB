@@ -24,11 +24,20 @@ std::string generate_random_string(std::size_t length) {
     }
     return random_string;
 }
-auto test_put(kvdb::core::AsyncDatabase& db, const std::vector<std::string>& keys,
-              const std::vector<std::string>& values) -> kvdb::core::coro::Task<bool> {
+auto test_put(kvdb::core::AsyncDatabase* db, std::span<const std::string> keys,
+              std::span<const std::string> values) -> kvdb::core::coro::Task<bool> {
     auto start_write = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < num_operations; ++i) {
-        co_await db.async_put(keys[i], values[i]);
+    // 批量 WAL 追加 + 内存表更新，减少系统调用
+    constexpr std::size_t window = 256;  // 可根据磁盘/CPU调整：64~1024
+    for (std::size_t i = 0; i < keys.size(); i += window) {
+        std::size_t n = std::min<std::size_t>(window, keys.size() - i);
+        auto kspan = keys.subspan(i, n);
+        auto vspan = values.subspan(i, n);
+        auto ok = co_await db->async_put_batch(kspan, vspan);
+        if (!ok) {
+            std::cerr << "批量写失败在批次起始: " << i << std::endl;
+            break;
+        }
     }
     auto end_write = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> write_duration = end_write - start_write;
@@ -44,17 +53,12 @@ auto test_put(kvdb::core::AsyncDatabase& db, const std::vector<std::string>& key
     co_return true;
 }
 
-// 异步读取测试函数
-auto test_get(kvdb::core::AsyncDatabase& db, const std::vector<std::string>& keys,
-              const std::vector<std::string>& values) -> kvdb::core::coro::Task<void> {
+// 异步读取性能测试
+auto test_get(kvdb::core::AsyncDatabase& db, std::span<const std::string> keys)
+    -> kvdb::core::coro::Task<void> {
     auto start_read = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_operations; ++i) {
         auto value = co_await db.async_get(keys[i]);
-        // if (!value.has_value()) {
-        //     std::cerr << "读取错误: 键 " << keys[i] << " 未找到" << std::endl;
-        // } else if (value.value() != values[i]) {
-        //     std::cerr << "读取错误: 键 " << keys[i] << " 的值不匹配" << std::endl;
-        // }
     }
     auto end_read = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> read_duration = end_read - start_read;
@@ -69,7 +73,7 @@ auto test_get(kvdb::core::AsyncDatabase& db, const std::vector<std::string>& key
     co_return;
 }
 // 异步压力测试任务
-auto performance_test_main(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::Task<void> {
+auto performance_test_main(kvdb::core::AsyncDatabase* db) -> kvdb::core::coro::Task<void> {
     std::vector<std::string> keys;
     std::vector<std::string> values;
     keys.reserve(num_operations);
@@ -81,10 +85,10 @@ auto performance_test_main(kvdb::core::AsyncDatabase& db) -> kvdb::core::coro::T
     }
 
     // // 异步写入性能测试
-    co_await test_put(db, keys, values);
+    co_await test_put(db, std::span<const std::string>{keys}, std::span<const std::string>{values});
 
     // 异步读取性能测试
-    co_await test_get(db, keys, values);
+    co_await test_get(*db, std::span<const std::string>{keys});
 
     co_return;
 }
@@ -105,7 +109,7 @@ int main() {
 
     kvdb::core::AsyncDatabase db(db_path);
     // 确保日志与数据库目录存在
-    // std::filesystem::create_directories(db_path);
+    std::filesystem::create_directories(db_path);
     // auto& logger = kvdb::logging::Logger::getInstance();
     // if (auto sinkExp = kvdb::logging::FileSink::create(db_path); sinkExp) {
     //     logger.addSink(*sinkExp);
@@ -113,9 +117,8 @@ int main() {
     //     std::cerr << "Failed to create FileSink: " << sinkExp.error() << std::endl;
     // }
     // 运行异步压力测试
-    // db.set_flush_threshold(1000);
-    db.run(db.init());  // 初始化数据库
-    db.run(performance_test_main(db));
+    // db.set_flush_threshold(50000);
+    db.run(performance_test_main(&db));
 
     return 0;
 }

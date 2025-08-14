@@ -56,25 +56,25 @@ void IOUring::wait_for_completion() {
     // 提交所有待处理的请求
     submit_requests();
 
-    io_uring_cqe* cqe;
-    // 等待完成队列中的一个条目(CQE)
-    if (io_uring_wait_cqe(static_cast<io_uring*>(ring_), &cqe) < 0) {
+    // 至少等待一个事件到来
+    int ret = io_uring_submit_and_wait(static_cast<io_uring*>(ring_), 1);
+    if (ret < 0) {
         throw std::runtime_error("等待完成队列条目失败");
     }
 
-    // 从CQE中提取结果和用户数据
-    void* user_data = io_uring_cqe_get_data(cqe);
-    auto result = cqe->res;
-
-    // 标记CQE为已处理
-    io_uring_cqe_seen(static_cast<io_uring*>(ring_), cqe);
-
-    // 恢复协程
-    // 通过基类指针安全地调用
-    auto* awaiter = static_cast<BaseAwaiter*>(user_data);
-    if (awaiter) {
-        awaiter->set_result(result);
-        awaiter->get_handle().resume();
+    // 批量清空完成队列，减少系统调用与切换开销
+    io_uring_cqe* cqe = nullptr;
+    while (io_uring_peek_cqe(static_cast<io_uring*>(ring_), &cqe) == 0 && cqe) {
+        void* user_data = io_uring_cqe_get_data(cqe);
+        auto result = cqe->res;
+        io_uring_cqe_seen(static_cast<io_uring*>(ring_), cqe);
+        auto* awaiter = static_cast<BaseAwaiter*>(user_data);
+        if (awaiter) {
+            awaiter->set_result(result);
+            awaiter->get_handle().resume();
+        }
+        // 继续 peek 下一条
+        cqe = nullptr;
     }
 }
 

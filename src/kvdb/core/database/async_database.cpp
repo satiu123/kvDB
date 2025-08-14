@@ -10,6 +10,7 @@ import kvdb.storage.wal.wal_record;
 import kvdb.logging.log;
 import kvdb.storage.sstable;
 import kvdb.core.types;
+import kvdb.core.coro.task;
 
 using kvdb::core::coro::Task;
 using kvdb::core::types::KeyView;
@@ -169,6 +170,27 @@ auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
     co_return true;
 }
 
+auto AsyncDatabase::async_put_batch(std::span<const std::string> keys,
+                                    std::span<const std::string> values) -> Task<bool> {
+    if (keys.size() != values.size() || keys.empty()) {
+        co_return false;
+    }
+    // 1) WAL 批量写
+    bool wal_ok = co_await wal_->async_append_batch_put(keys, values);
+    if (!wal_ok) {
+        co_return false;
+    }
+    // 2) 内存表批量更新
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        memtable_[keys[i]] = values[i];
+    }
+    // 3) 刷写判定
+    if (memtable_.size() >= flush_threshold_) {
+        co_await flush_memtable_to_sstable();
+    }
+    co_return true;
+}
+
 auto AsyncDatabase::async_get(KeyView key) -> Task<std::optional<std::string>> {
     // 首先在可变 MemTable 中查找
     if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
@@ -204,6 +226,63 @@ auto AsyncDatabase::async_get(KeyView key) -> Task<std::optional<std::string>> {
     }
     LOG_DEBUG()("未找到键: {}", key);
     co_return std::nullopt;
+}
+
+auto AsyncDatabase::async_get_parallel(KeyView key, std::size_t window)
+    -> Task<std::optional<std::string>> {
+    // 先查内存表
+    if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
+        if (it->second.empty())
+            co_return std::nullopt;
+        co_return it->second;
+    }
+    if (immutable_memtable_) {
+        if (auto it = immutable_memtable_->find(std::string(key));
+            it != immutable_memtable_->end()) {
+            if (it->second.empty())
+                co_return std::nullopt;
+            co_return it->second;
+        }
+    }
+    // 并行查找最近 window 个 sstable；一旦某个命中就继续向上短路
+    std::optional<std::string> found;
+    std::vector<Task<std::optional<std::string>>> inflight;
+    inflight.reserve(window);
+    for (std::size_t i = 0; i < sstables_.size();) {
+        inflight.clear();
+        for (std::size_t j = 0; j < window && i < sstables_.size(); ++j, ++i) {
+            inflight.emplace_back(sstables_[i]->find(key));
+        }
+        // 启动并驱动这批
+        for (auto& t : inflight)
+            t.resume();
+        while (true) {
+            bool all_done = true;
+            for (auto& t : inflight) {
+                if (!t.done()) {
+                    all_done = false;
+                    // 并行查找最近 window 个 sstable；增量检查完成，一旦命中尽快返回
+                }
+            }
+            if (all_done)
+                break;
+            ring_->wait_for_completion();
+        }
+        for (auto& t : inflight) {
+            auto val = t.get();
+            if (val) {
+                found = std::move(val);
+                break;
+            }
+        }
+        if (found)
+            break;
+    }
+    if (!found)
+        co_return std::nullopt;
+    if (found->empty())
+        co_return std::nullopt;
+    co_return found;
 }
 
 

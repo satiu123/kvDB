@@ -51,6 +51,42 @@ Task<bool> AsyncWal::async_append_clear() {
     co_return co_await async_append_record(record);
 }
 
+Task<bool> AsyncWal::async_append_batch_put(std::span<const std::string> keys,
+                                            std::span<const std::string> values) {
+    if (keys.size() != values.size()) {
+        co_return false;
+    }
+
+    // 预估缓冲大小并序列化到一个连续缓冲区，减少写系统调用
+    std::size_t total_size = 0;
+    std::vector<WalRecord> records;
+    records.reserve(keys.size());
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        records.emplace_back(WalOpType::PUT, keys[i], values[i], ++sequence_number_);
+        total_size += records.back().size();
+    }
+
+    std::vector<std::byte> temp_buffer(total_size);
+    std::size_t cursor = 0;
+    for (auto& r : records) {
+        auto s = r.size();
+        auto span = kvdb::core::types::ByteSpan{temp_buffer}.subspan(cursor, s);
+        auto ok = r.serialize_to(span);
+        if (!ok) {
+            LOG_ERROR()("序列化WAL批量PUT记录失败: {}", ok.error());
+            co_return false;
+        }
+        cursor += s;
+    }
+
+    auto write_result = co_await wal_file_.write(temp_buffer, -1);
+    if (write_result < 0 || static_cast<std::size_t>(write_result) != total_size) {
+        LOG_ERROR()("异步写入WAL批量数据失败，res={}, 期望={}", write_result, total_size);
+        co_return false;
+    }
+    co_return true;
+}
+
 Task<bool> AsyncWal::async_append_record(const WalRecord& record) {
     const auto required_size = record.size();
     std::vector<std::byte> temp_buffer(required_size);

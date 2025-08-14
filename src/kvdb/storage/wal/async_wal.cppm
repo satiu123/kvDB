@@ -29,6 +29,9 @@ class AsyncWal {
     Task<bool> async_append_remove(KeyView key);
     Task<bool> async_append_clear();
     Task<bool> async_append_record(const WalRecord& record);
+    // 批量追加多条 PUT 记录：序列化到一个缓冲区，一次写入，降低写放大
+    Task<bool> async_append_batch_put(std::span<const std::string> keys,
+                                      std::span<const std::string> values);
     Task<bool> async_replay(const std::function<bool(const WalRecord&)>& handler);
     Task<Result<WalRecord>> async_read_next_record();
 

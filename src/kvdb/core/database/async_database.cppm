@@ -33,6 +33,12 @@ class AsyncDatabase {
     auto async_get(KeyView key) -> Task<std::optional<std::string>>;
     auto async_remove(KeyView key) -> Task<bool>;
     auto init() -> Task<void>;
+    // 批量写入：尽量利用 WAL 批量写，降低系统调用/写放大
+    auto async_put_batch(std::span<const std::string> keys, std::span<const std::string> values)
+        -> Task<bool>;
+    // 并行查询：对最近的若干个 SSTable 并发查找，提升尾延迟
+    auto async_get_parallel(KeyView key, std::size_t window = 8)
+        -> Task<std::optional<std::string>>;
 
     // 运行一个异步任务直到完成
     template <typename T>
@@ -50,6 +56,48 @@ class AsyncDatabase {
             task.get();
         } else {
             return task.get();
+        }
+    }
+
+    // 并发运行一批任务（非 void 版本）：先全部启动，然后驱动 ring 直到全部完成，最后收集结果
+    template <typename T>
+    auto run_all(std::vector<Task<T>>&& tasks) -> std::vector<T> {
+        for (auto& t : tasks)
+            t.resume();
+        auto any_not_done = [&]() {
+            for (auto& t : tasks) {
+                if (!t.done())
+                    return true;
+            }
+            return false;
+        };
+        while (any_not_done()) {
+            ring_->wait_for_completion();
+        }
+        std::vector<T> results;
+        results.reserve(tasks.size());
+        for (auto& t : tasks) {
+            results.emplace_back(t.get());
+        }
+        return results;
+    }
+
+    // 并发运行一批任务（void 版本）
+    auto run_all(std::vector<Task<void>>&& tasks) -> void {
+        for (auto& t : tasks)
+            t.resume();
+        auto any_not_done = [&]() {
+            for (auto& t : tasks) {
+                if (!t.done())
+                    return true;
+            }
+            return false;
+        };
+        while (any_not_done()) {
+            ring_->wait_for_completion();
+        }
+        for (auto& t : tasks) {
+            t.get();
         }
     }
 
