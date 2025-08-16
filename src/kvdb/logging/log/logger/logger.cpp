@@ -59,8 +59,26 @@ void Logger::worker_loop() {
                 sink->log(record);
             }
             local_queue.pop();
+            // 标记处理完成一条记录
+            auto done = processed_.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (done == queued_.load(std::memory_order_relaxed)) {
+                // 当处理数追平入队数，刷新 sinks 并唤醒等待者
+                for (const auto& sink : sinks_) {
+                    sink->flush();
+                }
+                cv_.notify_all();
+            }
         }
     }
+}
+
+void Logger::flush() {
+    // 等待直到处理计数追平入队计数，且队列为空
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    cv_.wait(lock, [this] {
+        return queue_.empty() && processed_.load(std::memory_order_relaxed) ==
+                                     queued_.load(std::memory_order_relaxed);
+    });
 }
 
 }  // namespace kvdb::logging

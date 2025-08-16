@@ -32,7 +32,7 @@ namespace {
 int get_sstable_level_from_name(const std::string& path_str) {
     const std::string prefix = "sstable-L";
     std::string filename = std::filesystem::path(path_str).filename().string();
-    if (filename.rfind(prefix, 0) == 0) {
+    if (filename.starts_with(prefix)) {
         auto dash_after_level = filename.find('-', prefix.size());
         if (dash_after_level != std::string::npos) {
             std::string level_str =
@@ -78,13 +78,21 @@ int get_sstable_number(const std::string& path_str) {
 }
 }  // namespace
 AsyncDatabase::AsyncDatabase(std::string_view base_path)
-    : ring_(std::make_unique<io::IOUring>(1024)),
-      wal_(std::make_unique<storage::AsyncWal>(*ring_, base_path)),
-      manifest_(std::make_unique<database::AsyncManifestFile>(*ring_, base_path)) {
-    std::filesystem::path path(base_path);
+    : ring_(std::make_unique<io::IOUring>(1024)) {
+    // 将传入路径归一化为绝对路径：如果是相对路径，则以当前工作目录为基准
+    std::filesystem::path input(base_path);
+    std::filesystem::path abs =
+        input.is_absolute() ? input : (std::filesystem::current_path() / input);
+    base_path_ = abs.lexically_normal().string();
+
+    // 基于绝对路径初始化 WAL / Manifest 与 SSTables 目录
+    wal_ = std::make_unique<storage::AsyncWal>(*ring_, base_path_);
+    manifest_ = std::make_unique<database::AsyncManifestFile>(*ring_, base_path_);
+    std::filesystem::path path(base_path_);
     sstables_path_ = path / "sstables";
     std::filesystem::create_directories(sstables_path_);
-    LOG_INFO()("异步数据库已在 '{}' 初始化", std::string(base_path));
+    LOG_INFO()("SSTables 目录已创建或已存在: {}", sstables_path_);
+    LOG_INFO()("异步数据库已在 '{}' 初始化", base_path_);
 }
 
 auto AsyncDatabase::init() -> Task<void> {

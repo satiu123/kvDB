@@ -61,8 +61,8 @@ if(BUILD_TESTS)
 endif()
 
 # Add CLI executable
-# add_executable(kvdb-cli cli/main.cpp)
-# target_link_libraries(kvdb-cli PRIVATE kvdb std-cxx-modules)
+add_executable(kvdb-cli cli/main.cpp)
+target_link_libraries(kvdb-cli PRIVATE kvdb)
 
 # 添加示例
 option(BUILD_EXAMPLES "Build examples" ON)

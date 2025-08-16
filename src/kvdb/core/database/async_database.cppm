@@ -118,6 +118,8 @@ class AsyncDatabase {
   private:
     Task<void> flush_memtable_to_sstable();
     std::unique_ptr<kvdb::core::io::IOUring> ring_;  // 拥有所有权
+    // 归一化后的数据库根路径（绝对路径）
+    std::string base_path_;
     // 可变内存表
     OrderedKVMap memtable_;
     // 不可变内存表

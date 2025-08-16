@@ -22,13 +22,13 @@ namespace kvdb::storage {
 
 AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
     : ring_(&ring),
-      wal_path_(path / "wal" / "kvdb.wal"),
-      wal_file_(ring, wal_path_, FileMode::ReadWrite),
+      wal_path_(path / "wal"),
+      wal_file_(ring, wal_path_ + "/kvdb.wal", FileMode::ReadWrite),
       read_buffer_(READ_BUFFER_SIZE) {  // 初始化缓冲区大小
     if (!std::filesystem::exists(path / "wal")) {
         std::filesystem::create_directories(path / "wal");
     }
-    LOG_INFO()("异步WAL已为路径'{}'初始化", path.string());
+    LOG_INFO()("异步WAL已为路径'{}'初始化", wal_path_);
 }
 
 // --- 异步写入 API ---
