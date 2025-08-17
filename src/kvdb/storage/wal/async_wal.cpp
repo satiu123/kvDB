@@ -221,10 +221,11 @@ void AsyncWal::setCurrentSequenceNumber(std::uint64_t seq) {
 }
 
 void AsyncWal::truncate() {
-    // 删除旧 WAL 文件
-    File::remove(wal_path_);
-    // 用空文件替换，并保持 wal_file_ 为可读写以供后续 append
-    File new_file(*ring_, wal_path_, FileMode::ReadWrite);
+    // 仅删除 WAL 文件本身，而非目录
+    const std::string wal_file_path = wal_path_ + "/kvdb.wal";
+    File::remove(wal_file_path);
+    // 重新创建空 WAL 文件，保持 wal_file_ 可读写
+    File new_file(*ring_, wal_file_path, FileMode::ReadWrite);
     wal_file_ = std::move(new_file);
     // 重置读取与序列号状态
     file_read_offset_ = 0;

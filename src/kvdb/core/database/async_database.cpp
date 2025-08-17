@@ -162,7 +162,23 @@ auto AsyncDatabase::init() -> Task<void> {
 }
 
 auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
-    bool wal_ok = co_await wal_->async_append_put(key, value);
+    bool wal_ok = true;
+    if (wal_batch_policy_.enabled) {
+        // 追加到内存批量缓冲
+        wal_batch_keys_.emplace_back(key);
+        wal_batch_values_.emplace_back(value);
+        wal_batch_total_bytes_ += wal_batch_keys_.back().size() + wal_batch_values_.back().size();
+
+        // 判断是否达到阈值，达到则触发 flush
+        const bool reach_count = wal_batch_keys_.size() >= wal_batch_policy_.min_batch_count;
+        const bool reach_bytes = wal_batch_total_bytes_ >= wal_batch_policy_.min_total_bytes;
+        if (reach_count || reach_bytes) {
+            LOG_INFO()("WAL 批量缓冲已达到阈值，开始刷新...");
+            wal_ok = co_await flush_wal_batch();
+        }
+    } else {
+        wal_ok = co_await wal_->async_append_put(key, value);
+    }
     if (!wal_ok) {
         LOG_ERROR()("向 WAL 写入 PUT 操作失败，键: {}", key);
         co_return false;
@@ -171,6 +187,14 @@ auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
     memtable_[std::string(key)] = value;
     LOG_DEBUG()("写入键: {}, 值: {}", key, value);
     if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
+        // 在将 MemTable 刷入 SSTable 前，确保 WAL 批量缓冲已落盘，保证恢复一致性
+        if (wal_batch_policy_.enabled) {
+            bool ok = co_await flush_wal_batch();
+            if (!ok) {
+                LOG_ERROR()("在刷写 MemTable 前，刷新 WAL 批量缓冲失败");
+                co_return false;
+            }
+        }
         LOG_INFO()("MemTable 达到刷写阈值 ({})，准备刷写到 SSTable...", flush_threshold_);
         co_await flush_memtable_to_sstable();
     }
@@ -178,25 +202,26 @@ auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
     co_return true;
 }
 
-auto AsyncDatabase::async_put_batch(std::span<const std::string> keys,
-                                    std::span<const std::string> values) -> Task<bool> {
-    if (keys.size() != values.size() || keys.empty()) {
-        co_return false;
-    }
-    // 1) WAL 批量写
-    bool wal_ok = co_await wal_->async_append_batch_put(keys, values);
-    if (!wal_ok) {
-        co_return false;
-    }
-    // 2) 内存表批量更新
-    for (std::size_t i = 0; i < keys.size(); ++i) {
-        memtable_[keys[i]] = values[i];
-    }
-    // 3) 刷写判定
-    if (memtable_.size() >= flush_threshold_) {
-        co_await flush_memtable_to_sstable();
-    }
-    co_return true;
+// 刷新 WAL 批量缓冲：将缓冲内容按批量 API 写入 WAL
+Task<bool> AsyncDatabase::flush_wal_batch() {
+    if (!wal_batch_policy_.enabled)
+        co_return true;
+    if (wal_batch_flush_in_progress_)
+        co_return true;  // 简化：避免重入；更复杂可做队列化
+    if (wal_batch_keys_.empty())
+        co_return true;
+
+    wal_batch_flush_in_progress_ = true;
+    // 将当前缓冲交换出来，避免与并发追加互相影响
+    std::vector<std::string> keys;
+    std::vector<std::string> vals;
+    keys.swap(wal_batch_keys_);
+    vals.swap(wal_batch_values_);
+    wal_batch_total_bytes_ = 0;
+
+    bool ok = co_await wal_->async_append_batch_put(keys, vals);
+    wal_batch_flush_in_progress_ = false;
+    co_return ok;
 }
 
 auto AsyncDatabase::async_get(KeyView key) -> Task<std::optional<std::string>> {
@@ -235,64 +260,6 @@ auto AsyncDatabase::async_get(KeyView key) -> Task<std::optional<std::string>> {
     LOG_DEBUG()("未找到键: {}", key);
     co_return std::nullopt;
 }
-
-auto AsyncDatabase::async_get_parallel(KeyView key, std::size_t window)
-    -> Task<std::optional<std::string>> {
-    // 先查内存表
-    if (auto it = memtable_.find(std::string(key)); it != memtable_.end()) {
-        if (it->second.empty())
-            co_return std::nullopt;
-        co_return it->second;
-    }
-    if (immutable_memtable_) {
-        if (auto it = immutable_memtable_->find(std::string(key));
-            it != immutable_memtable_->end()) {
-            if (it->second.empty())
-                co_return std::nullopt;
-            co_return it->second;
-        }
-    }
-    // 并行查找最近 window 个 sstable；一旦某个命中就继续向上短路
-    std::optional<std::string> found;
-    std::vector<Task<std::optional<std::string>>> inflight;
-    inflight.reserve(window);
-    for (std::size_t i = 0; i < sstables_.size();) {
-        inflight.clear();
-        for (std::size_t j = 0; j < window && i < sstables_.size(); ++j, ++i) {
-            inflight.emplace_back(sstables_[i]->find(key));
-        }
-        // 启动并驱动这批
-        for (auto& t : inflight)
-            t.resume();
-        while (true) {
-            bool all_done = true;
-            for (auto& t : inflight) {
-                if (!t.done()) {
-                    all_done = false;
-                    // 并行查找最近 window 个 sstable；增量检查完成，一旦命中尽快返回
-                }
-            }
-            if (all_done)
-                break;
-            ring_->wait_for_completion();
-        }
-        for (auto& t : inflight) {
-            auto val = t.get();
-            if (val) {
-                found = std::move(val);
-                break;
-            }
-        }
-        if (found)
-            break;
-    }
-    if (!found)
-        co_return std::nullopt;
-    if (found->empty())
-        co_return std::nullopt;
-    co_return found;
-}
-
 
 auto AsyncDatabase::async_remove(KeyView key) -> Task<bool> {
     auto exists = co_await async_get(key);

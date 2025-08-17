@@ -28,16 +28,19 @@ auto test_put(kvdb::core::AsyncDatabase* db, std::span<const std::string> keys,
               std::span<const std::string> values) -> kvdb::core::coro::Task<bool> {
     auto start_write = std::chrono::high_resolution_clock::now();
     // 批量 WAL 追加 + 内存表更新，减少系统调用
-    constexpr std::size_t window = 256;  // 可根据磁盘/CPU调整：64~1024
-    for (std::size_t i = 0; i < keys.size(); i += window) {
-        std::size_t n = std::min<std::size_t>(window, keys.size() - i);
-        auto kspan = keys.subspan(i, n);
-        auto vspan = values.subspan(i, n);
-        auto ok = co_await db->async_put_batch(kspan, vspan);
-        if (!ok) {
-            std::cerr << "批量写失败在批次起始: " << i << std::endl;
-            break;
-        }
+    // constexpr std::size_t window = 256;  // 可根据磁盘/CPU调整：64~1024
+    // for (std::size_t i = 0; i < keys.size(); i += window) {
+    //     std::size_t n = std::min<std::size_t>(window, keys.size() - i);
+    //     auto kspan = keys.subspan(i, n);
+    //     auto vspan = values.subspan(i, n);
+    //     auto ok = co_await db->async_put_batch(kspan, vspan);
+    //     if (!ok) {
+    //         std::cerr << "批量写失败在批次起始: " << i << std::endl;
+    //         break;
+    //     }
+    // }
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        auto ok = co_await db->async_put(keys[i], values[i]);
     }
     auto end_write = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> write_duration = end_write - start_write;
@@ -125,6 +128,11 @@ int main() {
     std::filesystem::remove_all(db_path);
 
     kvdb::core::AsyncDatabase db(db_path);
+    db.set_wal_batch_policy({
+        .enabled = true,
+        .min_batch_count = 800,
+        .min_total_bytes = static_cast<std::size_t>(160) * 1024U,  // 16KB 阈值
+    });
     // 确保日志与数据库目录存在
     std::filesystem::create_directories(db_path);
     // auto& logger = kvdb::logging::Logger::getInstance();
