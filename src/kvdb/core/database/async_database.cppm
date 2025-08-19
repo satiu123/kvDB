@@ -109,23 +109,13 @@ class AsyncDatabase {
         flush_threshold_ = threshold;
     }
 
-    // WAL 批量写策略配置
-    struct WalBatchPolicy {
-        bool enabled = false;             // 是否启用批量写策略
-        std::size_t min_batch_count = 8;  // 触发批量写的最小条数
-        std::size_t min_total_bytes =
-            static_cast<std::size_t>(16) * 1024U;  // 触发批量写的最小总字节数
-    };
-
-    // 设置 WAL 批量写策略
-    auto set_wal_batch_policy(const WalBatchPolicy& policy) -> void {
-        wal_batch_policy_ = policy;
+    // 配置 WAL 选项（转发给 AsyncWal）
+    void configure_wal(const storage::AsyncWal::Options& opts) {
+        wal_->set_options(opts);
     }
 
   private:
     Task<void> flush_memtable_to_sstable();
-    // 刷新 WAL 批量缓冲（达到阈值或需要一致性时调用）
-    Task<bool> flush_wal_batch();
 
     std::unique_ptr<kvdb::core::io::IOUring> ring_;  // 拥有所有权
     // 归一化后的数据库根路径（绝对路径）
@@ -142,12 +132,7 @@ class AsyncDatabase {
     std::unique_ptr<storage::AsyncWal> wal_;
     std::unique_ptr<database::AsyncManifestFile> manifest_;
     database::Manifest manifest_data_;
-    WalBatchPolicy wal_batch_policy_{};  // WAL 批量写策略
-    // WAL 批量缓冲
-    std::vector<std::string> wal_batch_keys_;
-    std::vector<std::string> wal_batch_values_;
-    std::size_t wal_batch_total_bytes_ = 0;
-    bool wal_batch_flush_in_progress_ = false;
+    // 旧 WAL 批量策略已移除，改由 AsyncWal 内部组提交与同步策略承担
 };
 
 }  // namespace kvdb::core

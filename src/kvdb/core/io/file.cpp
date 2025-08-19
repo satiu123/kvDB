@@ -129,6 +129,15 @@ std::size_t File::get_size() {
     return file_size_.load();
 }
 
+int File::sync(bool data_only) {
+    open_if_needed();
+    int rc = data_only ? ::fdatasync(fd_) : ::fsync(fd_);
+    if (rc == 0) {
+        return 0;
+    }
+    return -errno;
+}
+
 // 静态方法：删除文件
 void File::remove(const std::string& path) {
     if (::remove(path.c_str()) != 0) {

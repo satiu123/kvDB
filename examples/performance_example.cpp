@@ -1,8 +1,7 @@
 import std;
 import kvdb.core;
-import kvdb.core.coro.task;
 import kvdb.logging;
-
+import kvdb.storage.wal.async_wal;
 // 全局随机数生成器
 static std::mt19937 g_rng;
 const int num_operations = 20000;
@@ -40,7 +39,7 @@ auto test_put(kvdb::core::AsyncDatabase* db, std::span<const std::string> keys,
     //     }
     // }
     for (std::size_t i = 0; i < keys.size(); ++i) {
-        auto ok = co_await db->async_put(keys[i], values[i]);
+        co_await db->async_put(keys[i], values[i]);
     }
     auto end_write = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> write_duration = end_write - start_write;
@@ -128,10 +127,12 @@ int main() {
     std::filesystem::remove_all(db_path);
 
     kvdb::core::AsyncDatabase db(db_path);
-    db.set_wal_batch_policy({
-        .enabled = true,
-        .min_batch_count = 800,
-        .min_total_bytes = static_cast<std::size_t>(160) * 1024U,  // 16KB 阈值
+    db.configure_wal({
+        .group_commit = true,                                       // 启用组提交
+        .max_buffer_bytes = 1024 * 1024,                            // 1MB 缓冲区
+        .max_records = 1000,                                        // 每次提交最多1000条记录
+        .max_interval_ms = 10,                                      // 每10毫秒提交一次
+        .sync_mode = kvdb::storage::AsyncWal::SyncMode::FDataSync,  // 使用 fdatasync
     });
     // 确保日志与数据库目录存在
     std::filesystem::create_directories(db_path);

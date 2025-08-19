@@ -28,6 +28,7 @@ AsyncWal::AsyncWal(IOUring& ring, const std::filesystem::path& path)
     if (!std::filesystem::exists(path / "wal")) {
         std::filesystem::create_directories(path / "wal");
     }
+    write_buffer_.reserve(options_.max_buffer_bytes);
     LOG_INFO()("异步WAL已为路径'{}'初始化", wal_path_);
 }
 
@@ -89,27 +90,58 @@ Task<bool> AsyncWal::async_append_batch_put(std::span<const std::string> keys,
 
 Task<bool> AsyncWal::async_append_record(const WalRecord& record) {
     const auto required_size = record.size();
-    std::vector<std::byte> temp_buffer(required_size);
+    // 若启用组提交，先写入内存缓冲
+    if (options_.group_commit) {
+        const bool need_rotate = write_buffer_.size() + required_size > options_.max_buffer_bytes;
+        if (need_rotate) {
+            bool ok = co_await async_flush(true);
+            if (!ok) {
+                co_return false;
+            }
+        }
+        const auto prev_size = write_buffer_.size();
+        write_buffer_.resize(prev_size + required_size);
+        auto span = ByteSpan{write_buffer_}.subspan(prev_size, required_size);
+        auto sr = record.serialize_to(span);
+        if (!sr) {
+            LOG_ERROR()("序列化WAL记录失败: {}", sr.error());
+            co_return false;
+        }
+        ++pending_records_;
 
-    auto serialize_result = record.serialize_to(temp_buffer);
-    if (!serialize_result) {
-        LOG_ERROR()("序列化WAL记录失败: {}", serialize_result.error());
-        co_return false;
+        // 触发策略：数量/字节阈值或时间窗口
+        bool reach_count = pending_records_ >= options_.max_records;
+        bool reach_bytes = write_buffer_.size() >= options_.max_buffer_bytes;
+        bool reach_time = (std::chrono::steady_clock::now() - last_flush_tp_) >=
+                          std::chrono::milliseconds(options_.max_interval_ms);
+        if (reach_count || reach_bytes || reach_time) {
+            co_return co_await async_flush();
+        }
+        co_return true;
+    } else {
+        // 直写模式：每条记录单独写
+        std::vector<std::byte> temp_buffer(required_size);
+        auto serialize_result = record.serialize_to(ByteSpan{temp_buffer});
+        if (!serialize_result) {
+            LOG_ERROR()("序列化WAL记录失败: {}", serialize_result.error());
+            co_return false;
+        }
+
+        auto write_result = co_await wal_file_.write(temp_buffer, -1);
+        if (write_result < 0) {  // 检查小于0的错误码
+            LOG_ERROR()("异步写入WAL文件失败，错误码: {}", write_result);
+            co_return false;
+        }
+        co_return true;
     }
-
-    auto write_result = co_await wal_file_.write(temp_buffer, -1);
-    if (write_result < 0) {  // 检查小于0的错误码
-        LOG_ERROR()("异步写入WAL文件失败，错误码: {}", write_result);
-        co_return false;
-    }
-
-    co_return true;
 }
 
 // --- 异步读取 API ---
 
 Task<bool> AsyncWal::async_replay(const std::function<bool(const WalRecord&)>& handler) {
     LOG_INFO()("开始异步WAL重放...");
+    // 确保缓冲区数据已落盘，避免遗漏未写入文件的记录
+    (void)co_await async_flush(true);
     file_read_offset_ = 0;
     buffer_pos_ = 0;
     buffer_valid_size_ = 0;
@@ -253,6 +285,52 @@ auto AsyncWal::getFormattedContent() -> Task<Result<std::vector<std::string>>> {
 
     std::tie(file_read_offset_, buffer_pos_, buffer_valid_size_) = original_state;
     co_return lines;
+}
+
+// --- 刷新与同步 ---
+
+Task<bool> AsyncWal::async_flush(bool force) {
+    if (!options_.group_commit) {
+        co_return true;  // 直写模式无需额外 flush
+    }
+    if (write_buffer_.empty()) {
+        co_return true;
+    }
+    // 写入缓冲区到文件末尾
+    auto write_res = co_await wal_file_.write(ByteSpan{write_buffer_}, -1);
+    if (write_res < 0 || static_cast<std::size_t>(write_res) != write_buffer_.size()) {
+        LOG_ERROR()("写入WAL缓冲失败, res={}, buf={}B", write_res, write_buffer_.size());
+        co_return false;
+    }
+    write_buffer_.clear();
+    pending_records_ = 0;
+    last_flush_tp_ = std::chrono::steady_clock::now();
+    co_return true;
+}
+
+Task<bool> AsyncWal::async_sync() {
+    // 先确保缓冲写入
+    bool ok = co_await async_flush();
+    if (!ok) {
+        co_return false;
+    }
+    // 根据选项执行同步
+    int rc = 0;
+    switch (options_.sync_mode) {
+        case SyncMode::None:
+            co_return true;
+        case SyncMode::FDataSync:
+            rc = wal_file_.sync(true);
+            break;
+        case SyncMode::FSync:
+            rc = wal_file_.sync(false);
+            break;
+    }
+    if (rc < 0) {
+        LOG_ERROR()("同步WAL到磁盘失败: {}", rc);
+        co_return false;
+    }
+    co_return true;
 }
 
 }  // namespace kvdb::storage

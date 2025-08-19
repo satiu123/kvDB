@@ -162,23 +162,7 @@ auto AsyncDatabase::init() -> Task<void> {
 }
 
 auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
-    bool wal_ok = true;
-    if (wal_batch_policy_.enabled) {
-        // 追加到内存批量缓冲
-        wal_batch_keys_.emplace_back(key);
-        wal_batch_values_.emplace_back(value);
-        wal_batch_total_bytes_ += wal_batch_keys_.back().size() + wal_batch_values_.back().size();
-
-        // 判断是否达到阈值，达到则触发 flush
-        const bool reach_count = wal_batch_keys_.size() >= wal_batch_policy_.min_batch_count;
-        const bool reach_bytes = wal_batch_total_bytes_ >= wal_batch_policy_.min_total_bytes;
-        if (reach_count || reach_bytes) {
-            LOG_INFO()("WAL 批量缓冲已达到阈值，开始刷新...");
-            wal_ok = co_await flush_wal_batch();
-        }
-    } else {
-        wal_ok = co_await wal_->async_append_put(key, value);
-    }
+    bool wal_ok = co_await wal_->async_append_put(key, value);
     if (!wal_ok) {
         LOG_ERROR()("向 WAL 写入 PUT 操作失败，键: {}", key);
         co_return false;
@@ -187,13 +171,11 @@ auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
     memtable_[std::string(key)] = value;
     LOG_DEBUG()("写入键: {}, 值: {}", key, value);
     if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
-        // 在将 MemTable 刷入 SSTable 前，确保 WAL 批量缓冲已落盘，保证恢复一致性
-        if (wal_batch_policy_.enabled) {
-            bool ok = co_await flush_wal_batch();
-            if (!ok) {
-                LOG_ERROR()("在刷写 MemTable 前，刷新 WAL 批量缓冲失败");
-                co_return false;
-            }
+        // 在将 MemTable 刷入 SSTable 前，确保 WAL 已持久化（组提交+fdatasync/fsync）
+        bool synced = co_await wal_->async_sync();
+        if (!synced) {
+            LOG_ERROR()("在刷写 MemTable 前，同步 WAL 到磁盘失败");
+            co_return false;
         }
         LOG_INFO()("MemTable 达到刷写阈值 ({})，准备刷写到 SSTable...", flush_threshold_);
         co_await flush_memtable_to_sstable();
@@ -202,27 +184,7 @@ auto AsyncDatabase::async_put(KeyView key, ValueView value) -> Task<bool> {
     co_return true;
 }
 
-// 刷新 WAL 批量缓冲：将缓冲内容按批量 API 写入 WAL
-Task<bool> AsyncDatabase::flush_wal_batch() {
-    if (!wal_batch_policy_.enabled)
-        co_return true;
-    if (wal_batch_flush_in_progress_)
-        co_return true;  // 简化：避免重入；更复杂可做队列化
-    if (wal_batch_keys_.empty())
-        co_return true;
-
-    wal_batch_flush_in_progress_ = true;
-    // 将当前缓冲交换出来，避免与并发追加互相影响
-    std::vector<std::string> keys;
-    std::vector<std::string> vals;
-    keys.swap(wal_batch_keys_);
-    vals.swap(wal_batch_values_);
-    wal_batch_total_bytes_ = 0;
-
-    bool ok = co_await wal_->async_append_batch_put(keys, vals);
-    wal_batch_flush_in_progress_ = false;
-    co_return ok;
-}
+// 旧的 WAL 批量缓冲已移除，统一由 AsyncWal 管理
 
 auto AsyncDatabase::async_get(KeyView key) -> Task<std::optional<std::string>> {
     // 首先在可变 MemTable 中查找
@@ -275,6 +237,12 @@ auto AsyncDatabase::async_remove(KeyView key) -> Task<bool> {
     memtable_[std::string(key)] = "";  // 标记为删除
     LOG_DEBUG()("已删除键: {}", key);
     if (memtable_.size() >= flush_threshold_) {  // 当memtable大小达到阈值时
+        // 刷表前确保 WAL 持久化
+        bool synced = co_await wal_->async_sync();
+        if (!synced) {
+            LOG_ERROR()("在刷写 MemTable 前，同步 WAL 到磁盘失败");
+            co_return false;
+        }
         LOG_INFO()("MemTable 达到刷写阈值 ({})，准备刷写到 SSTable...", flush_threshold_);
         co_await flush_memtable_to_sstable();
     }
