@@ -2,15 +2,21 @@ export module kvdb.core:async_database;
 
 import std;
 import kvdb.core.coro.task;
+import kvdb.core.types;
 import kvdb.core.database.async_manifest;
 import kvdb.storage.wal.async_wal;
 import kvdb.core.database.manifest;
 import kvdb.core.coro.task;
 import kvdb.storage.sstable;
+import kvdb.core.types;
 
 import kvdb.core.io.io_uring;
 using kvdb::core::coro::Task;
 export namespace kvdb::core {
+// 引入常用别名，避免到处写全限定名
+using kvdb::core::types::KeyView;
+using kvdb::core::types::OrderedKVMap;
+using kvdb::core::types::ValueView;
 
 class AsyncDatabase {
   public:
@@ -23,14 +29,14 @@ class AsyncDatabase {
     AsyncDatabase& operator=(AsyncDatabase&&) = delete;
 
     // 异步操作
-    auto async_put(std::string_view key, std::string_view value) -> kvdb::core::coro::Task<bool>;
-    auto async_get(std::string_view key) -> kvdb::core::coro::Task<std::optional<std::string>>;
-    auto async_remove(std::string_view key) -> kvdb::core::coro::Task<bool>;
-    auto init() -> kvdb::core::coro::Task<void>;
+    auto async_put(KeyView key, ValueView value) -> Task<bool>;
+    auto async_get(KeyView key) -> Task<std::optional<std::string>>;
+    auto async_remove(KeyView key) -> Task<bool>;
+    auto init() -> Task<void>;
 
     // 运行一个异步任务直到完成
     template <typename T>
-    auto run(kvdb::core::coro::Task<T>&& task) -> T {
+    auto run(Task<T>&& task) -> T {
         // 启动任务
         task.resume();
 
@@ -39,9 +45,53 @@ class AsyncDatabase {
             ring_->wait_for_completion();
         }
 
-        // 如果任务有返回值，则返回
-        if constexpr (!std::is_void_v<T>) {
+        // 始终调用 get() 以获取结果并传播异常（void 任务也需要调用以抛出异常）
+        if constexpr (std::is_void_v<T>) {
+            task.get();
+        } else {
             return task.get();
+        }
+    }
+
+    // 并发运行一批任务（非 void 版本）：先全部启动，然后驱动 ring 直到全部完成，最后收集结果
+    template <typename T>
+    auto run_all(std::vector<Task<T>>&& tasks) -> std::vector<T> {
+        for (auto& t : tasks)
+            t.resume();
+        auto any_not_done = [&]() {
+            for (auto& t : tasks) {
+                if (!t.done())
+                    return true;
+            }
+            return false;
+        };
+        while (any_not_done()) {
+            ring_->wait_for_completion();
+        }
+        std::vector<T> results;
+        results.reserve(tasks.size());
+        for (auto& t : tasks) {
+            results.emplace_back(t.get());
+        }
+        return results;
+    }
+
+    // 并发运行一批任务（void 版本）
+    auto run_all(std::vector<Task<void>>&& tasks) -> void {
+        for (auto& t : tasks)
+            t.resume();
+        auto any_not_done = [&]() {
+            for (auto& t : tasks) {
+                if (!t.done())
+                    return true;
+            }
+            return false;
+        };
+        while (any_not_done()) {
+            ring_->wait_for_completion();
+        }
+        for (auto& t : tasks) {
+            t.get();
         }
     }
 
@@ -49,6 +99,8 @@ class AsyncDatabase {
     void printManifest() const;
     Task<void> printWALRecords() const;
     Task<void> printSSTables() const;
+    // 触发对当前所有SSTable的压缩合并
+    Task<void> compact_sstables();
     // 获取内部的ring，供内部组件使用
     auto get_ring() -> kvdb::core::io::IOUring& {
         return *ring_;
@@ -57,21 +109,30 @@ class AsyncDatabase {
         flush_threshold_ = threshold;
     }
 
+    // 配置 WAL 选项（转发给 AsyncWal）
+    void configure_wal(const storage::AsyncWal::Options& opts) {
+        wal_->set_options(opts);
+    }
+
   private:
     Task<void> flush_memtable_to_sstable();
+
     std::unique_ptr<kvdb::core::io::IOUring> ring_;  // 拥有所有权
+    // 归一化后的数据库根路径（绝对路径）
+    std::string base_path_;
     // 可变内存表
-    std::map<std::string, std::string, std::less<>> memtable_;
+    OrderedKVMap memtable_;
     // 不可变内存表
-    std::unique_ptr<std::map<std::string, std::string, std::less<>>> immutable_memtable_;
+    std::unique_ptr<OrderedKVMap> immutable_memtable_;
 
     std::string sstables_path_;
     std::vector<std::unique_ptr<storage::SSTable>> sstables_;
-    std::uint64_t max_sstable_num_ = 0;
+    std::uint64_t max_sstable_num_ = 10;    // 最大SSTable数量
     std::uint64_t flush_threshold_ = 1024;  // 1MB
     std::unique_ptr<storage::AsyncWal> wal_;
     std::unique_ptr<database::AsyncManifestFile> manifest_;
     database::Manifest manifest_data_;
+    // 旧 WAL 批量策略已移除，改由 AsyncWal 内部组提交与同步策略承担
 };
 
 }  // namespace kvdb::core

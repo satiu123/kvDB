@@ -24,7 +24,7 @@ endif()
 # 如果使用GCC编译器
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(STATUS "Using GCC compiler")
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+    add_compile_options(-Wall -Wextra -Wpedantic)
 
     set(MOD_BASE_DIR /usr/include/c++/${CMAKE_CXX_COMPILER_VERSION}/bits)
     set(STD_MODULE_FILE ${MOD_BASE_DIR}/std.cc)
@@ -61,8 +61,8 @@ if(BUILD_TESTS)
 endif()
 
 # Add CLI executable
-# add_executable(kvdb-cli cli/main.cpp)
-# target_link_libraries(kvdb-cli PRIVATE kvdb std-cxx-modules)
+add_executable(kvdb-cli cli/main.cpp)
+target_link_libraries(kvdb-cli PRIVATE kvdb)
 
 # 添加示例
 option(BUILD_EXAMPLES "Build examples" ON)

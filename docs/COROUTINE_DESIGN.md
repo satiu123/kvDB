@@ -66,7 +66,7 @@ Task<std::string> async_read_file(File& file) {
     // 5. 当 io_uring 通知读操作完成时，协程在这里恢复
     //    bytes_read 变量被赋值为 await_resume() 的返回值
     if (bytes_read > 0) {
-        co_return std::string(reinterpret_cast<char*>(buffer.data()), bytes_read);
+        co_return std::string(std::bit_cast<char*>(buffer.data()), bytes_read);
     }
     co_return "Error";
 }

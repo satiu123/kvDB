@@ -4,9 +4,11 @@ import std;
 import kvdb.core.io.file;
 import kvdb.core.database.manifest;
 import kvdb.logging.log;
+import kvdb.core.types;
 
 using kvdb::core::coro::Task;
 using kvdb::core::io::FileMode;
+using kvdb::core::types::Result;
 using kvdb::logging::LOG_DEBUG, kvdb::logging::LOG_ERROR, kvdb::logging::LOG_INFO,
     kvdb::logging::LOG_WARNING;
 
@@ -23,7 +25,7 @@ AsyncManifestFile::AsyncManifestFile(IOUring& ring, const std::filesystem::path&
     LOG_INFO()("异步Manifest文件处理器已为路径'{}'初始化", manifest_path_.string());
 }
 
-auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string>> {
+auto AsyncManifestFile::async_load() -> Task<Result<Manifest>> {
     if (!ring_) {
         LOG_ERROR()("IOUring尚未初始化，无法进行异步加载");
         co_return std::unexpected("IOUring尚未初始化");
@@ -42,7 +44,7 @@ auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string
         LOG_WARNING()("读取CURRENT文件失败或文件为空");
         co_return Manifest{};
     }
-    std::string manifest_filename(reinterpret_cast<char*>(current_buffer.data()), read_res);
+    std::string manifest_filename(std::bit_cast<char*>(current_buffer.data()), read_res);
     LOG_DEBUG()("从CURRENT文件读到Manifest文件名: {}", manifest_filename);
 
     // 2. 异步读取MANIFEST文件
@@ -57,7 +59,7 @@ auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string
     }
     // 3. 反序列化
     LOG_DEBUG()("正在反序列化MANIFEST内容");
-    std::string content(reinterpret_cast<char*>(manifest_buffer.data()), read_res);
+    std::string content(std::bit_cast<char*>(manifest_buffer.data()), read_res);
     std::stringstream ss(content);
     Manifest manifest;
     if (auto res = manifest.deserialize(ss); !res) {
@@ -68,8 +70,7 @@ auto AsyncManifestFile::async_load() -> Task<std::expected<Manifest, std::string
     co_return manifest;
 }
 
-auto AsyncManifestFile::async_store(const Manifest& manifest)
-    -> kvdb::core::coro::Task<std::expected<void, std::string>> {
+auto AsyncManifestFile::async_store(const Manifest& manifest) -> Task<Result<void>> {
     if (!ring_) {
         LOG_ERROR()("IOUring尚未初始化，无法进行异步存储");
         co_return std::unexpected("IOUring尚未初始化");

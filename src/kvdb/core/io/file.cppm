@@ -4,8 +4,11 @@ import std;
 import kvdb.core.io.io_uring;
 import kvdb.core.coro.task;
 import kvdb.core.coro.awaiter.io_awaiter;
+import kvdb.core.types;
 
 export namespace kvdb::core::io {
+using kvdb::core::types::ByteSpan;
+using kvdb::core::types::ConstByteSpan;
 // 导出文件打开模式的枚举类
 enum class FileMode : std::uint8_t {
     Read,      // 只读
@@ -32,19 +35,23 @@ class File {
     File& operator=(File&& other) noexcept;
 
     // 异步读取
-    [[nodiscard]] auto read(std::span<std::byte> buffer, std::uint64_t offset) -> ReadAwaiter;
+    [[nodiscard]] auto read(ByteSpan buffer, std::uint64_t offset) -> ReadAwaiter;
 
     // 异步写入 (offset = -1 表示追加)
-    [[nodiscard]] auto write(std::span<const std::byte> buffer, std::int64_t offset)
-        -> WriteAwaiter;
+    [[nodiscard]] auto write(ConstByteSpan buffer, std::int64_t offset) -> WriteAwaiter;
 
     [[nodiscard]] int getFd() const;
 
     // 获取文件大小
     [[nodiscard]] std::size_t get_size();
 
+    // 同步刷新到磁盘（data_only=true 使用 fdatasync，否则使用 fsync）
+    // 返回 0 表示成功，<0 表示错误码（-errno）
+    int sync(bool data_only = true);
+
     // 静态方法，用于删除文件
     static void remove(const std::string& path);
+
 
   private:
     void open_if_needed();

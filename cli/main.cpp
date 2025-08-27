@@ -1,131 +1,87 @@
 import std;
-import kvdb;
+import kvdb.core;    // AsyncDatabase
+import kvdb.logging; // Logger & sinks
 
-// 函数声明
-void print_usage();
-void process_command(kvdb::core::Database& db, const std::string& line);
-std::vector<std::string> split_input(const std::string& input);
+namespace {
+// 简单分词
+auto split(std::string_view s) -> std::vector<std::string> {
+    std::vector<std::string> out;
+    std::string token;
+    std::istringstream iss(std::string{s});
+    while (iss >> token)
+        out.push_back(std::move(token));
+    return out;
+}
 
-
-// 打印使用帮助
 void print_usage() {
     std::cout << "命令:\n"
-              << "  put <key> <value>    - 插入或更新一个键值对。\n"
-              << "  get <key>            - 检索一个键的值。\n"
-              << "  remove <key>         - 删除一个键。\n"
-              << "  exists <key>         - 检查一个键是否存在。\n"
-              << "  size                 - 获取键的数量。\n"
-              << "  keys                 - 列出所有的键。\n"
-              << "  clear                - 清空数据库。\n"
-              << "  compact              - 压缩数据库。\n"
-              << "  wal                  - 打印WAL记录。\n"
-              << "  sstables             - 打印SSTable文件列表。\n"
-              << "  manifest             - 打印MANIFEST文件内容。\n"
-              << "  exit/quit            - 退出CLI。\n"
-              << "  help                 - 显示此帮助信息。\n";
+              << "  put <key> <value>   插入/更新\n"
+              << "  get <key>           查询\n"
+              << "  del <key>           删除\n"
+              << "  compact             压缩合并 SSTables\n"
+              << "  wal                 打印 WAL 记录\n"
+              << "  sstables            打印 SSTable 列表\n"
+              << "  manifest            打印 MANIFEST\n"
+              << "  help                显示帮助\n"
+              << "  exit|quit           退出\n";
 }
+}  // namespace
 
-// 主函数
 int main(int argc, char* argv[]) {
-    std::string db_path = ".";  // 默认数据库路径
-    if (argc > 1) {
-        db_path = argv[1];
-    }
-    kvdb::core::Database db(db_path);
-    db.setMemtableFlushThreshold(4);
-    if (auto sink = kvdb::logging::FileSink::create(db_path + "/data/kvdb.log")) {
-        kvdb::logging::Logger::getInstance().addSink(*sink);
-    } else {
-        std::cerr << "创建文件日志接收器失败: " << sink.error() << std::endl;
-    }
-    std::cout << "欢迎来到 kvDB 命令行界面!\n";
+    std::string db_path = argc > 1 ? argv[1] : std::string{"./data/performance_test_db_async"};
+    std::filesystem::create_directories(db_path);
+
+    // 配置日志到控制台（可选）
+    auto& logger = kvdb::logging::Logger::getInstance();
+    logger.addSink(std::make_shared<kvdb::logging::ConsoleSink>());
+
+    kvdb::core::AsyncDatabase db(db_path);
+    db.set_flush_threshold(static_cast<std::uint64_t>(4) * 1024);  // 4KB 阈值
+    db.run(db.init());                                             // 初始化
+    // 等待日志线程把初始化期间的日志全部输出完毕
+    logger.flush();
+
+    std::cout << "kvDB CLI 已就绪，数据目录: " << db_path << "\n";
+    print_usage();
+
     std::string line;
-    std::cout << "kvdb> ";
+    std::cout << "kvdb> " << std::flush;
     while (std::getline(std::cin, line)) {
-        if (line.empty()) {
-            std::cout << "kvdb> ";
+        auto args = split(line);
+        if (args.empty()) {
+            std::cout << "kvdb> " << std::flush;
             continue;
         }
-        if (line == "quit" || line == "exit") {
+        const auto& cmd = args[0];
+        if (cmd == "exit" || cmd == "quit")
             break;
+        if (cmd == "help") {
+            print_usage();
+        } else if (cmd == "put" && args.size() >= 3) {
+            bool ok = db.run(db.async_put(args[1], args[2]));
+            std::cout << (ok ? "OK" : "ERR") << "\n";
+        } else if (cmd == "get" && args.size() >= 2) {
+            auto val = db.run(db.async_get(args[1]));
+            if (val)
+                std::cout << *val << "\n";
+            else
+                std::cout << "(nil)\n";
+        } else if (cmd == "del" && args.size() >= 2) {
+            bool ok = db.run(db.async_remove(args[1]));
+            std::cout << (ok ? "OK" : "ERR") << "\n";
+        } else if (cmd == "compact") {
+            db.run(db.compact_sstables());
+            std::cout << "OK\n";
+        } else if (cmd == "wal") {
+            db.run(db.printWALRecords());
+        } else if (cmd == "sstables") {
+            db.run(db.printSSTables());
+        } else if (cmd == "manifest") {
+            db.printManifest();
+        } else {
+            std::cout << "未知命令，输入 help 查看可用命令。\n";
         }
-        process_command(db, line);
-        std::cout << "kvdb> ";
+        std::cout << "kvdb> " << std::flush;
     }
-
-    std::cout << "\n再见!" << std::endl;
     return 0;
-}
-
-// 处理命令
-void process_command(kvdb::core::Database& db, const std::string& line) {
-    auto args = split_input(line);
-    if (args.empty()) {
-        return;
-    }
-
-    const std::string& command = args[0];
-
-    if (command == "put" && args.size() == 3) {
-        if (db.put(args[1], args[2])) {
-            std::cout << "OK\n";
-        } else {
-            std::cerr << "错误: 存入键失败。\n";
-        }
-    } else if (command == "get" && args.size() == 2) {
-        auto value = db.get(args[1]);
-        if (value) {
-            std::cout << *value << '\n';
-        } else {
-            std::cout << "(空)\n";
-        }
-    } else if (command == "remove" && args.size() == 2) {
-        if (db.remove(args[1])) {
-            std::cout << "OK\n";
-        } else {
-            std::cerr << "错误: 键未找到或删除失败。\n";
-        }
-    } else if (command == "exists" && args.size() == 2) {
-        if (db.exists(args[1])) {
-            std::cout << "true\n";
-        } else {
-            std::cout << "false\n";
-        }
-    } else if (command == "size" && args.size() == 1) {
-        std::cout << db.size() << '\n';
-    } else if (command == "keys" && args.size() == 1) {
-        for (const auto& key : db.keys()) {
-            std::cout << key << '\n';
-        }
-    } else if (command == "clear" && args.size() == 1) {
-        db.clear();
-        std::cout << "OK\n";
-    } else if (command == "compact" && args.size() == 1) {
-        db.compact();
-        std::cout << "OK\n";
-    } else if (command == "wal" && args.size() == 1) {
-        db.printWALRecords();
-    } else if (command == "sstables" && args.size() == 1) {
-        db.printSSTables();
-    } else if (command == "manifest" && args.size() == 1) {
-        db.printManifest();
-    } else if (command == "help") {
-        print_usage();
-    } else if (command == "quit" || command == "exit") {
-        // 这个情况在主循环中处理，但为了清晰起见保留在此处
-    } else {
-        std::cout << "未知命令: " << command << std::endl;
-        print_usage();
-    }
-}
-
-// 分割输入字符串
-std::vector<std::string> split_input(const std::string& input) {
-    std::istringstream iss(input);
-    std::vector<std::string> tokens;
-    std::string token;
-    while (iss >> token) {
-        tokens.push_back(token);
-    }
-    return tokens;
 }

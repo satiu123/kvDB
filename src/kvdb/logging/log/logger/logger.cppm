@@ -15,6 +15,8 @@ class Logger {
     void setLevel(LogLevel level);
     [[nodiscard]] bool shouldLog(LogLevel level) const;
     [[nodiscard]] bool isEnabled() const;
+    // 等待所有已提交的日志记录被处理并刷新到 sink
+    void flush();
 
     template <typename... Args>
     void log(LogLevel level, const std::source_location& loc,
@@ -35,6 +37,9 @@ class Logger {
     mutable std::mutex queue_mutex_;
     std::condition_variable cv_;
     std::jthread worker_thread_;
+    // 记录已入队与已处理的条目计数
+    std::atomic<std::uint64_t> queued_{0};
+    std::atomic<std::uint64_t> processed_{0};
 };
 
 // 模板函数的实现需要放在模块接口文件中
@@ -50,6 +55,7 @@ void Logger::log(LogLevel level, const std::source_location& loc,
         std::lock_guard<std::mutex> lock(queue_mutex_);
         queue_.push(std::move(record));
     }
+    queued_.fetch_add(1, std::memory_order_relaxed);
     cv_.notify_one();
 }
 

@@ -1,11 +1,13 @@
 export module kvdb.core.cache;
 
 import std;
+import kvdb.core.types;
 
 export namespace kvdb::core {
 
-// 定义缓存值的类型：一个指向常量map的共享指针
-using ParsedBlock = std::shared_ptr<const std::map<std::string, std::string, std::less<>>>;
+using kvdb::core::types::OrderedKVMap;
+// 定义缓存值的类型：一个指向常量 map 的共享指针
+using ParsedBlock = std::shared_ptr<const OrderedKVMap>;
 
 // 为 std::pair 提供自定义哈希函数，使其能用于 unordered_map
 struct PairHash {

@@ -37,10 +37,11 @@ class [[nodiscard]] Task {
             this->value.emplace(std::move(value));
         }
         void unhandled_exception() {
-            std::terminate();
+            exception = std::current_exception();
         }
 
         std::optional<T> value;
+        std::exception_ptr exception;
         std::coroutine_handle<> continuation = nullptr;
     };
 
@@ -70,7 +71,11 @@ class [[nodiscard]] Task {
         return *this;
     }
 
-    auto operator co_await() noexcept {
+    // 禁止对左值进行 co_await，避免悬挂/重复等待
+    auto operator co_await() & = delete;
+
+    // 仅允许右值 co_await：把所有权移交给 awaiter，并在 await_resume 中销毁帧
+    auto operator co_await() && noexcept {
         struct awaiter {
             std::coroutine_handle<promise_type> handle_;
 
@@ -78,16 +83,29 @@ class [[nodiscard]] Task {
                 return !handle_ || handle_.done();
             }
 
-            void await_suspend(std::coroutine_handle<> awaiting_handle) noexcept {
+            std::coroutine_handle<> await_suspend(
+                std::coroutine_handle<> awaiting_handle) noexcept {
                 handle_.promise().continuation = awaiting_handle;
-                handle_.resume();
+                return handle_;
             }
 
-            T await_resume() noexcept {
-                return std::move(*handle_.promise().value);
+            T await_resume() {
+                auto h = handle_;
+                handle_ = {};
+                auto& p = h.promise();
+                // 拿到结果/异常后销毁协程帧
+                if (p.exception) {
+                    h.destroy();
+                    std::rethrow_exception(p.exception);
+                }
+                T out = std::move(*p.value);
+                h.destroy();
+                return out;
             }
         };
-        return awaiter{handle_};
+        auto h = handle_;
+        handle_ = {};
+        return awaiter{h};
     }
 
     // 检查协程是否完成
@@ -104,7 +122,22 @@ class [[nodiscard]] Task {
 
     // 获取结果
     T get() {
-        return std::move(*handle_.promise().value);
+        if (!handle_) {
+            throw std::runtime_error("Task has no coroutine handle");
+        }
+        if (!handle_.done()) {
+            handle_.resume();
+        }
+        auto h = handle_;
+        handle_ = {};
+        auto& p = h.promise();
+        if (p.exception) {
+            h.destroy();
+            std::rethrow_exception(p.exception);
+        }
+        T out = std::move(*p.value);
+        h.destroy();
+        return out;
     }
 
   private:
@@ -142,8 +175,9 @@ class [[nodiscard]] Task<void> {
         }
         void return_void() {}
         void unhandled_exception() {
-            std::terminate();
+            exception = std::current_exception();
         }
+        std::exception_ptr exception;
         std::coroutine_handle<> continuation = nullptr;
     };
 
@@ -173,7 +207,11 @@ class [[nodiscard]] Task<void> {
         return *this;
     }
 
-    auto operator co_await() noexcept {
+    // 禁止对左值进行 co_await
+    auto operator co_await() & = delete;
+
+    // 仅允许右值 co_await
+    auto operator co_await() && noexcept {
         struct awaiter {
             std::coroutine_handle<promise_type> handle_;
 
@@ -181,14 +219,26 @@ class [[nodiscard]] Task<void> {
                 return !handle_ || handle_.done();
             }
 
-            void await_suspend(std::coroutine_handle<> awaiting_handle) noexcept {
+            std::coroutine_handle<> await_suspend(
+                std::coroutine_handle<> awaiting_handle) noexcept {
                 handle_.promise().continuation = awaiting_handle;
-                handle_.resume();
+                return handle_;
             }
 
-            void await_resume() noexcept {}
+            void await_resume() {
+                auto h = handle_;
+                handle_ = {};
+                auto& p = h.promise();
+                if (p.exception) {
+                    h.destroy();
+                    std::rethrow_exception(p.exception);
+                }
+                h.destroy();
+            }
         };
-        return awaiter{handle_};
+        auto h = handle_;
+        handle_ = {};
+        return awaiter{h};
     }
 
     // 检查协程是否完成
@@ -204,10 +254,24 @@ class [[nodiscard]] Task<void> {
     }
 
     // 获取结果 (void)
-    void get() {}
+    void get() {
+        if (!handle_) {
+            return;
+        }
+        if (!handle_.done()) {
+            handle_.resume();
+        }
+        auto h = handle_;
+        handle_ = {};
+        auto& p = h.promise();
+        if (p.exception) {
+            h.destroy();
+            std::rethrow_exception(p.exception);
+        }
+        h.destroy();
+    }
 
   private:
     std::coroutine_handle<promise_type> handle_;
 };
 }  // namespace kvdb::core::coro
-

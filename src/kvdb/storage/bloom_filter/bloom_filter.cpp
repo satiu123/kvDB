@@ -22,7 +22,7 @@ static void MurmurHash3_x64_128(const void* key, const int len, const std::uint3
     std::uint64_t h1 = seed;
     std::uint64_t h2 = seed;
 
-    const auto* blocks = reinterpret_cast<const std::uint64_t*>(data);
+    const auto* blocks = std::bit_cast<const std::uint64_t*>(data);
 
     for (int i = 0; i < nblocks; i++) {
         std::uint64_t k1 = blocks[i * 2 + 0];
@@ -106,8 +106,8 @@ static void MurmurHash3_x64_128(const void* key, const int len, const std::uint3
     h1 += h2;
     h2 += h1;
 
-    reinterpret_cast<std::uint64_t*>(out)[0] = h1;
-    reinterpret_cast<std::uint64_t*>(out)[1] = h2;
+    std::bit_cast<std::uint64_t*>(out)[0] = h1;
+    std::bit_cast<std::uint64_t*>(out)[1] = h2;
 }
 
 namespace kvdb::storage {
@@ -157,10 +157,10 @@ std::size_t BloomFilter::getBitSetSizeInBytes() const {
 
 void BloomFilter::serialize(std::ostream& os) const {
     std::uint32_t num_hash_functions = num_hash_functions_;
-    os.write(reinterpret_cast<const char*>(&num_hash_functions), sizeof(num_hash_functions));
+    os.write(std::bit_cast<const char*>(&num_hash_functions), sizeof(num_hash_functions));
 
     std::uint64_t bit_set_size = bit_set_.size();
-    os.write(reinterpret_cast<const char*>(&bit_set_size), sizeof(bit_set_size));
+    os.write(std::bit_cast<const char*>(&bit_set_size), sizeof(bit_set_size));
 
     std::vector<std::uint8_t> byte_vector((bit_set_size + 7) / 8, 0);
     for (std::size_t i = 0; i < bit_set_size; ++i) {
@@ -168,24 +168,24 @@ void BloomFilter::serialize(std::ostream& os) const {
             byte_vector[i / 8] |= (1 << (i % 8));
         }
     }
-    os.write(reinterpret_cast<const char*>(byte_vector.data()), byte_vector.size());
+    os.write(std::bit_cast<const char*>(byte_vector.data()), byte_vector.size());
 }
 
 auto BloomFilter::deserialize(std::istream& is) -> std::optional<BloomFilter> {
     std::uint32_t num_hash_functions;
-    is.read(reinterpret_cast<char*>(&num_hash_functions), sizeof(num_hash_functions));
+    is.read(std::bit_cast<char*>(&num_hash_functions), sizeof(num_hash_functions));
     if (is.gcount() != sizeof(num_hash_functions)) {
         return std::nullopt;
     }
 
     std::uint64_t bit_set_size;
-    is.read(reinterpret_cast<char*>(&bit_set_size), sizeof(bit_set_size));
+    is.read(std::bit_cast<char*>(&bit_set_size), sizeof(bit_set_size));
     if (is.gcount() != sizeof(bit_set_size)) {
         return std::nullopt;
     }
 
     std::vector<std::uint8_t> byte_vector((bit_set_size + 7) / 8);
-    is.read(reinterpret_cast<char*>(byte_vector.data()), byte_vector.size());
+    is.read(std::bit_cast<char*>(byte_vector.data()), byte_vector.size());
     if (static_cast<std::uint64_t>(is.gcount()) != byte_vector.size()) {
         return std::nullopt;
     }

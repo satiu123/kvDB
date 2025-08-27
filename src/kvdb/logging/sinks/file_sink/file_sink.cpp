@@ -1,11 +1,13 @@
 module kvdb.logging.sinks.file_sink;
 import kvdb.logging.log;
+import kvdb.core.types;
 
 namespace kvdb::logging {
 
 // 工厂函数实现
-auto FileSink::create(std::string_view filePath)
-    -> std::expected<std::shared_ptr<FileSink>, std::string> {
+using kvdb::core::types::Result;
+
+auto FileSink::create(std::string_view filePath) -> Result<std::shared_ptr<FileSink>> {
     // 使用 new FileSink(filePath) 因为构造函数是私有的
     auto sink = std::shared_ptr<FileSink>(new FileSink(std::string(filePath) + "/kvdb.log"));
     if (sink->open()) {

@@ -6,12 +6,17 @@ import kvdb.storage.bloom_filter;
 import kvdb.core.coro.task;
 import kvdb.core.io.file;
 import kvdb.core.io.io_uring;
+import kvdb.core.types;
 
 
 using kvdb::core::coro::Task;
 using kvdb::core::io::File;
 using kvdb::core::io::IOUring;
 export namespace kvdb::storage {
+// 将常用别名引入当前命名空间，避免冗长限定名
+using kvdb::core::types::KeyView;
+using kvdb::core::types::OrderedKVMap;
+using kvdb::core::types::ValueView;
 
 // 用于文件验证的魔数
 constexpr std::uint64_t SSTABLE_MAGIC = 0x4B56444253535441;  // "KVDB_SSTA"
@@ -32,8 +37,8 @@ class SSTable {
         explicit Builder(IOUring& ring, std::string_view path,
                          std::size_t block_size_threshold = 4096);
 
-        Task<void> add(std::string_view key, std::string_view value);
-        Task<bool> finish(const std::map<std::string, std::string, std::less<>>& data);
+        Task<void> add(KeyView key, ValueView value);
+        Task<bool> finish(const OrderedKVMap& data);
 
       private:
         Task<void> writeBlock();
@@ -57,12 +62,11 @@ class SSTable {
     };
 
     // 从map构建SSTable的静态函数
-    static Task<bool> buildFrom(IOUring& ring, std::string_view path,
-                                const std::map<std::string, std::string, std::less<>>& data);
+    static Task<bool> buildFrom(IOUring& ring, std::string_view path, const OrderedKVMap& data);
 
     // 用于读取的成员函数
     Task<bool> open(std::string_view path);
-    Task<std::optional<std::string>> find(std::string_view key);
+    Task<std::optional<std::string>> find(KeyView key);
     Task<std::map<std::string, std::string>> readAll();
     const std::string& getPath() const {
         return path_;
